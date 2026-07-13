@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Kampüs Bitkileri</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Work+Sans:wght@400;500;600;700&family=Special+Elite&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --cream:#EDE6D3;
+    --cream-2:#E3D9BE;
+    --ink:#22301C;
+    --ink-soft:#3C4A34;
+    --green:#3B5D42;
+    --green-dark:#263D2B;
+    --ochre:#B4863C;
+    --rust:#A24E36;
+    --line:#C9BFA0;
+    --paper-shadow: 0 2px 0 rgba(34,48,28,0.06), 0 8px 18px rgba(34,48,28,0.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;height:100dvh;margin:0;overflow:hidden;max-width:100vw;}
+  body{
+    font-family:'Work Sans', sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    overflow:hidden;
+  }
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw;max-width:100%;overflow-x:hidden;}
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--green-dark);
+    color:var(--cream);
+    padding:12px 14px 10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    row-gap:8px;
+    gap:10px;
+    border-bottom:3px double var(--ochre);
+    z-index:20;
+  }
+  .brand{display:flex;flex-direction:column;line-height:1.1;min-width:0;overflow:hidden;}
+  .brand .eyebrow{
+    font-family:'Special Elite', monospace;
+    font-size:10px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ochre);
+    margin-bottom:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .brand h1{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:600;
+    font-size:22px;
+    margin:0;
+    letter-spacing:.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .brand .latin{
+    font-family:'Cormorant Garamond', serif;
+    font-style:italic;
+    font-size:13px;
+    color:#CFC7A8;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}
+  .icon-btn{
+    background:transparent;
+    border:1px solid rgba(237,230,211,0.35);
+    color:var(--cream);
+    border-radius:3px;
+    padding:7px 10px;
+    font-family:'Work Sans',sans-serif;
+    font-size:12px;
+    font-weight:500;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    white-space:nowrap;
+  }
+  .icon-btn:hover{background:rgba(237,230,211,0.12);}
+  .icon-btn.primary{background:var(--ochre);border-color:var(--ochre);color:var(--green-dark);font-weight:600;}
+  .icon-btn.primary:hover{background:#c69847;}
+
+  /* ---------- Layout ---------- */
+  .layout{flex:1;display:flex;min-height:0;position:relative;}
+  #map{flex:1;height:100%;background:#dcd6c2;}
+  .leaflet-container{font-family:'Work Sans',sans-serif;}
+
+  aside.sidebar{
+    width:300px;
+    background:var(--cream);
+    border-right:1px solid var(--line);
+    display:flex;
+    flex-direction:column;
+    z-index:1200;
+  }
+  .sidebar-head{padding:12px 14px 8px;border-bottom:1px solid var(--line);}
+  .sidebar-head .count{
+    font-family:'Special Elite',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  #search{
+    width:100%;
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+    font-family:'Work Sans',sans-serif;
+    font-size:13px;
+    color:var(--ink);
+  }
+  .sidebar-list{flex:1;overflow-y:auto;padding:10px;}
+  .spec-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:10px 10px 9px;
+    margin-bottom:10px;
+    cursor:pointer;
+    box-shadow:var(--paper-shadow);
+    position:relative;
+  }
+  .spec-card:hover{border-color:var(--ochre);}
+  .spec-card .acc-no{
+    font-family:'Special Elite',monospace;
+    font-size:9px;
+    color:var(--rust);
+    letter-spacing:.05em;
+  }
+  .spec-card .name-tr{font-weight:600;font-size:13.5px;margin:2px 0 0;}
+  .spec-card .name-latin{
+    font-family:'Cormorant Garamond', serif;
+    font-style:italic;
+    font-size:14.5px;
+    color:var(--green);
+  }
+  .empty-note{
+    color:var(--ink-soft);
+    font-size:12.5px;
+    padding:18px 6px;
+    text-align:center;
+    line-height:1.5;
+  }
+
+  /* mobile drawer */
+  .sidebar-toggle{display:none;}
+  @media (max-width:760px){
+    aside.sidebar{
+      position:absolute;
+      left:0;top:0;bottom:0;
+      width:82%;
+      max-width:320px;
+      transform:translateX(-105%);
+      transition:transform .25s ease;
+      box-shadow:8px 0 24px rgba(0,0,0,0.25);
+    }
+    aside.sidebar.open{transform:translateX(0);}
+    .sidebar-toggle{display:flex;}
+    .brand{max-width:calc(100% - 50px);}
+    .brand .eyebrow{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25;}
+    .brand h1{font-size:17px;}
+    .brand .latin{display:none;}
+    .header-actions{gap:5px;width:100%;justify-content:space-between;}
+    .header-actions .icon-btn{flex:1;justify-content:center;padding:6px 4px;font-size:10px;white-space:nowrap;}
+  }
+
+  .location-search{
+    position:absolute;
+    top:12px;left:50%;
+    transform:translateX(-50%);
+    width:92%;max-width:380px;
+    z-index:850;
+  }
+  .location-search input{
+    width:100%;
+    padding:9px 12px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:#fff;
+    font-family:'Work Sans',sans-serif;
+    font-size:13px;
+    color:var(--ink);
+    box-shadow:var(--paper-shadow);
+  }
+  .loc-results{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:4px;
+    margin-top:4px;
+    box-shadow:var(--paper-shadow);
+    display:none;
+    max-height:220px;
+    overflow-y:auto;
+  }
+  .loc-results.show{display:block;}
+  .loc-result-item{
+    padding:9px 11px;
+    font-size:12.5px;
+    cursor:pointer;
+    border-bottom:1px solid var(--line);
+    line-height:1.4;
+  }
+  .loc-result-item:last-child{border-bottom:none;}
+  .loc-result-item:hover{background:var(--cream-2);}
+
+  .hint-banner{
+    position:absolute;
+    bottom:14px;left:50%;
+    transform:translateX(-50%);
+    background:var(--green-dark);
+    color:var(--cream);
+    font-size:12px;
+    padding:8px 14px;
+    border-radius:3px;
+    border:1px solid var(--ochre);
+    z-index:900;
+    box-shadow:var(--paper-shadow);
+    max-width:88%;
+    text-align:center;
+  }
+
+  /* ---------- Custom marker ---------- */
+  .leaf-marker{
+    width:26px;height:26px;
+    background:var(--green);
+    border:2px solid var(--cream);
+    border-radius:50% 50% 50% 0;
+    transform:rotate(-45deg);
+    box-shadow:0 2px 4px rgba(0,0,0,0.35);
+  }
+  .leaf-marker.me{background:var(--rust);}
+
+  /* ---------- Leaflet popup / herbarium card ---------- */
+  .leaflet-popup-content-wrapper{
+    background:#FBF7EC;
+    border-radius:2px;
+    border:1px solid var(--line);
+    box-shadow:0 6px 20px rgba(34,48,28,0.25);
+  }
+  .leaflet-popup-content{margin:0;width:240px !important;}
+  .leaflet-popup-tip{background:#FBF7EC;}
+  .herb-card{padding:12px 13px 12px;position:relative;}
+  .herb-card::before{
+    content:"";
+    position:absolute;top:8px;right:10px;
+    width:46px;height:46px;
+    border:1.5px dashed var(--ochre);
+    border-radius:50%;
+    opacity:.55;
+  }
+  .herb-card.has-photo::before{display:none;}
+  .herb-card .mini-photo{
+    position:absolute;top:8px;right:10px;
+    width:46px;height:46px;
+    border-radius:50%;
+    object-fit:cover;
+    border:2px solid var(--ochre);
+  }
+  .herb-card .acc-no{
+    font-family:'Special Elite',monospace;
+    font-size:9.5px;
+    color:var(--rust);
+    letter-spacing:.05em;
+    display:block;
+    margin-bottom:2px;
+  }
+  .herb-card .name-tr{font-weight:700;font-size:14px;margin:0 0 1px;padding-right:54px;}
+  .herb-card .name-latin{
+    font-family:'Cormorant Garamond', serif;
+    font-style:italic;
+    font-weight:600;
+    font-size:16px;
+    color:var(--green);
+    margin:0 0 6px;
+  }
+  .herb-card .family{
+    font-size:11px;color:var(--ink-soft);margin-bottom:6px;
+    border-bottom:1px solid var(--line);padding-bottom:6px;
+  }
+  .herb-card .extra-photo-note{
+    font-size:11px;color:var(--ink-soft);margin-bottom:6px;
+  }
+  .herb-card .desc{font-size:12px;line-height:1.5;color:var(--ink);}
+  .herb-card .card-actions{margin-top:8px;text-align:right;}
+  .herb-card .del-link{
+    font-size:11px;color:var(--rust);
+    background:none;border:none;cursor:pointer;
+    text-decoration:underline;padding:0;
+  }
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed;inset:0;
+    background:rgba(34,48,28,0.55);
+    display:flex;align-items:center;justify-content:center;
+    z-index:1000;
+    padding:16px;
+  }
+  .overlay.hidden{display:none;}
+  .modal{
+    background:#FBF7EC;
+    width:100%;max-width:400px;
+    max-height:88vh;
+    overflow-y:auto;
+    border:1px solid var(--line);
+    border-radius:3px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.35);
+    padding:18px 18px 16px;
+  }
+  .modal h2{
+    font-family:'Cormorant Garamond',serif;
+    font-size:20px;font-weight:600;margin:0 0 2px;
+  }
+  .modal .sub{font-size:11.5px;color:var(--ink-soft);margin-bottom:14px;font-family:'Special Elite',monospace;}
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block;font-size:11.5px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink-soft);margin-bottom:4px;
+  }
+  .field input[type=text], .field textarea{
+    width:100%;padding:8px 9px;
+    border:1px solid var(--line);border-radius:2px;
+    font-family:'Work Sans',sans-serif;font-size:13.5px;
+    background:#fff;color:var(--ink);
+  }
+  .field input[type=text].latin-input{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;}
+  .field textarea{resize:vertical;min-height:60px;}
+  .photo-drop{
+    border:1.5px dashed var(--line);
+    border-radius:2px;
+    padding:12px;text-align:center;
+    font-size:12px;color:var(--ink-soft);
+    cursor:pointer;
+    position:relative;
+  }
+  .photo-drop img{max-width:100%;max-height:130px;display:block;margin:0 auto 6px;object-fit:cover;}
+  .photo-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;position:relative;z-index:2;}
+  .photo-thumb{position:relative;width:62px;height:62px;z-index:3;}
+  .photo-thumb img{width:100%;height:100%;max-width:none;max-height:none;margin:0;object-fit:cover;border:1px solid var(--line);border-radius:2px;display:block;}
+  .photo-thumb .remove-x{
+    position:absolute;top:-6px;right:-6px;width:18px;height:18px;
+    background:var(--rust);color:#fff;border-radius:50%;
+    font-size:12px;line-height:17px;text-align:center;
+    z-index:5;cursor:pointer;border:1.5px solid var(--cream);
+  }
+  .photo-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;}
+  .btn{
+    flex:1;padding:10px;border-radius:3px;border:1px solid var(--line);
+    font-family:'Work Sans',sans-serif;font-size:13px;font-weight:600;
+    cursor:pointer;background:#fff;color:var(--ink);
+  }
+  .btn.save{background:var(--green);border-color:var(--green);color:#fff;}
+  .btn.save:disabled{opacity:.6;cursor:default;}
+  .btn.cancel{background:transparent;}
+
+  /* ---------- Fullscreen photo slider ---------- */
+  .slider-overlay{
+    position:fixed;inset:0;
+    background:rgba(10,14,8,0.94);
+    z-index:3000;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .slider-overlay.hidden{display:none;}
+  .slider-overlay img{
+    max-width:88vw;max-height:78vh;
+    object-fit:contain;
+    border-radius:2px;
+  }
+  .slider-close{
+    position:absolute;top:16px;right:16px;
+    width:36px;height:36px;border-radius:50%;
+    background:rgba(237,230,211,0.15);
+    border:1px solid rgba(237,230,211,0.4);
+    color:var(--cream);font-size:17px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .slider-nav{
+    position:absolute;top:50%;transform:translateY(-50%);
+    width:46px;height:46px;border-radius:50%;
+    background:rgba(237,230,211,0.15);
+    border:1px solid rgba(237,230,211,0.4);
+    color:var(--cream);font-size:26px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    line-height:1;
+  }
+  .slider-nav.prev{left:14px;}
+  .slider-nav.next{right:14px;}
+  .slider-counter{
+    position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+    color:var(--cream);font-family:'Special Elite',monospace;
+    font-size:12px;background:rgba(237,230,211,0.15);
+    padding:4px 12px;border-radius:20px;
+  }
+
+  .toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--cream);
+    padding:9px 16px;border-radius:3px;font-size:12.5px;
+    z-index:2000;box-shadow:0 6px 18px rgba(0,0,0,0.3);
+    opacity:0;transition:opacity .25s;
+    pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+
+  /* ---------- Detail page ---------- */
+  .detail-modal{
+    max-width:520px;
+    position:relative;
+    padding:0;
+    border-radius:6px;
+  }
+  .detail-hero{
+    position:relative;
+    height:180px;
+    background:linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
+    overflow:hidden;
+    border-radius:6px 6px 0 0;
+  }
+  .detail-hero img{
+    width:100%;height:100%;object-fit:cover;display:block;
+    cursor:pointer;
+  }
+  .detail-hero .no-photo-mark{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:52px;opacity:.5;
+  }
+  .detail-hero .close-x{
+    position:absolute;top:10px;right:10px;
+    width:32px;height:32px;border-radius:50%;
+    background:rgba(34,48,28,0.55);border:1px solid rgba(237,230,211,0.5);
+    color:var(--cream);font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    line-height:1;z-index:3;
+  }
+  .detail-hero .acc-badge{
+    position:absolute;bottom:10px;left:12px;
+    font-family:'Special Elite',monospace;
+    font-size:10.5px;color:var(--cream);
+    background:rgba(34,48,28,0.55);
+    padding:3px 9px;border-radius:20px;
+    letter-spacing:.05em;
+  }
+  .detail-body{padding:18px 20px 20px;}
+  .detail-body .name-tr{font-weight:700;font-size:22px;margin:0 0 2px;}
+  .detail-body .name-latin{
+    font-family:'Cormorant Garamond', serif;
+    font-style:italic;font-weight:600;font-size:19px;
+    color:var(--green);margin:0 0 10px;
+  }
+  .classification-chip{
+    display:inline-block;background:var(--green);color:#fff;
+    font-size:11.5px;padding:4px 11px;border-radius:20px;
+    margin:0 6px 10px 0;font-family:'Work Sans',sans-serif;
+  }
+  .detail-gallery{
+    display:flex;gap:8px;overflow-x:auto;
+    padding-bottom:4px;margin:4px 0 16px;
+    scroll-snap-type:x proximity;
+  }
+  .detail-gallery img{
+    width:88px;height:88px;flex:0 0 auto;
+    object-fit:cover;border-radius:3px;
+    border:1px solid var(--line);
+    scroll-snap-align:start;cursor:pointer;
+  }
+  .info-cards{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}
+  .info-card{
+    background:var(--cream-2);border:1px solid var(--line);
+    border-radius:4px;padding:10px 13px;
+  }
+  .info-card .label{
+    font-family:'Special Elite',monospace;font-size:10px;
+    text-transform:uppercase;letter-spacing:.06em;
+    color:var(--rust);margin-bottom:4px;
+  }
+  .info-card .value{
+    font-size:13.5px;line-height:1.6;color:var(--ink);
+    white-space:pre-wrap;
+  }
+  .detail-body .card-actions{
+    display:flex;flex-wrap:wrap;gap:8px;
+    justify-content:space-between;align-items:center;
+    padding-top:4px;border-top:1px solid var(--line);
+  }
+  .detail-body .edit-link{
+    background:none;border:1px solid var(--ochre);color:var(--ochre);
+    border-radius:3px;cursor:pointer;padding:7px 12px;font-size:12.5px;
+  }
+  .detail-body .speak-link{
+    background:none;border:1px solid var(--ink-soft);color:var(--ink-soft);
+    border-radius:3px;cursor:pointer;padding:7px 12px;font-size:12.5px;
+  }
+  .detail-body .speak-link.speaking{
+    background:var(--ink-soft);color:var(--cream);
+  }
+  .detail-body .del-link{
+    font-size:12.5px;color:var(--rust);
+    background:none;border:1px solid var(--rust);
+    border-radius:3px;cursor:pointer;
+    padding:7px 12px;
+  }
+  .detail-body .web-search-link{
+    background:none;border:1px solid var(--green);color:var(--green);
+    border-radius:3px;cursor:pointer;padding:7px 12px;font-size:12.5px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="icon-btn sidebar-toggle" id="toggleSidebar">☰</button>
+      <div class="brand">
+        <span class="eyebrow">İnönü Üniversitesi Eczacılık Fakültesi</span>
+        <h1>Kampüs Bitkileri</h1>
+        <span class="latin">Herbarium Facultatis Pharmaciae — canlı bitki envanteri</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="goCampusBtn">🏫 Kampüse Git</button>
+      <button class="icon-btn" id="locateBtn">📍 Konumum</button>
+      <button class="icon-btn" id="authBtn">🔐 Giriş Yap</button>
+      <button class="icon-btn primary" id="addBtnHeader">+ Bitki Ekle</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <div class="count" id="specCount">0 kayıtlı tür</div>
+        <input type="text" id="search" placeholder="Tür veya Latince isim ara…">
+      </div>
+      <div class="sidebar-list" id="specList">
+        <div class="empty-note">Yükleniyor…</div>
+      </div>
+    </aside>
+
+    <main style="flex:1;position:relative;min-width:0;">
+      <div id="map"></div>
+      <div class="location-search" id="locationSearch">
+        <input type="text" id="locSearchInput" placeholder="🔍 Adres veya yer ara (örn. Turgut Özal Tıp Merkezi)" autocomplete="off">
+        <div class="loc-results" id="locResults"></div>
+        <button id="setCenterBtn" class="icon-btn" style="display:none;margin-top:6px;width:100%;justify-content:center;background:var(--ochre);border-color:var(--ochre);color:var(--green-dark);font-weight:600;">📌 Burayı kampüs merkezi yap</button>
+      </div>
+      <div class="hint-banner" id="hintBanner">Bir bitki eklemek için haritaya dokun 🌿</div>
+    </main>
+  </div>
+</div>
+
+<!-- Add plant modal -->
+<div class="overlay hidden" id="addOverlay">
+  <div class="modal">
+    <h2>Yeni Kayıt</h2>
+    <div class="sub" id="coordLabel">Konum seçilmedi</div>
+    <form id="addForm">
+      <div class="field">
+        <label>Türkçe / yaygın adı</label>
+        <input type="text" id="fName" placeholder="örn. Manolya (opsiyonel)">
+      </div>
+      <div class="field">
+        <label>Latince (bilimsel) adı</label>
+        <input type="text" class="latin-input" id="fLatin" placeholder="örn. Magnolia grandiflora (opsiyonel)">
+      </div>
+      <div class="field">
+        <label>Familya (opsiyonel)</label>
+        <input type="text" id="fFamily" placeholder="örn. Magnoliaceae">
+      </div>
+      <div class="field">
+        <label>Açıklama</label>
+        <textarea id="fDesc" placeholder="Kullanım alanı, etken maddesi, ayırt edici özellikleri…"></textarea>
+      </div>
+      <div class="field">
+        <label>Fotoğraf</label>
+        <div class="photo-drop" id="photoDrop">
+          <span id="photoDropText">Cihazdan fotoğraf(lar) seçmek için dokun</span>
+          <div class="photo-grid" id="photoGrid"></div>
+          <input type="file" accept="image/*" id="fPhoto" multiple>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn cancel" id="cancelAdd">Vazgeç</button>
+        <button type="submit" class="btn save" id="saveBtn">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Login overlay -->
+<div class="overlay hidden" id="loginOverlay">
+  <div class="modal">
+    <h2>Yönetici Girişi</h2>
+    <div class="sub">Bitki eklemek, düzenlemek ve silmek için giriş yap</div>
+    <form id="loginForm">
+      <div class="field">
+        <label>E-posta</label>
+        <input type="email" id="loginEmail" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Şifre</label>
+        <input type="password" id="loginPassword" required autocomplete="current-password">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn cancel" id="loginCancelBtn">Vazgeç</button>
+        <button type="submit" class="btn save" id="loginSubmitBtn">Giriş Yap</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Detail page overlay -->
+<div class="overlay hidden" id="detailOverlay">
+  <div class="modal detail-modal" id="detailContent"></div>
+</div>
+
+<!-- Fullscreen photo slider -->
+<div class="slider-overlay hidden" id="photoSliderOverlay">
+  <div class="close-x slider-close" id="closeSliderBtn">✕</div>
+  <button class="slider-nav prev" id="sliderPrev">‹</button>
+  <img id="sliderImg" src="">
+  <button class="slider-nav next" id="sliderNext">›</button>
+  <div class="slider-counter" id="sliderCounter"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Firebase ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyALywy7_FFCvcCgCdUO_oUZ7u9XIQVHkSg",
+  authDomain: "kampusbitkiler.firebaseapp.com",
+  projectId: "kampusbitkiler",
+  storageBucket: "kampusbitkiler.firebasestorage.app",
+  messagingSenderId: "371973179231",
+  appId: "1:371973179231:web:1f74f51642c17b2839d8ea"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+try{
+  auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
+}catch(e){}
+let currentUser = null;
+
+const CAMPUS_CENTER = [38.3342, 38.4381]; // İnönü Üniversitesi Merkez Kampüsü, Battalgazi/Malatya (varsayılan - kullanıcı arama ile düzeltebilir)
+const CENTER_OVERRIDE_KEY = 'kampus-bitkileri-merkez-override';
+
+function getCampusCenter(){
+  try{
+    const raw = localStorage.getItem(CENTER_OVERRIDE_KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      if(typeof p.lat === 'number' && typeof p.lng === 'number') return [p.lat, p.lng];
+    }
+  }catch(e){}
+  return CAMPUS_CENTER;
+}
+
+function setCampusCenter(lat, lng){
+  try{
+    localStorage.setItem(CENTER_OVERRIDE_KEY, JSON.stringify({lat, lng}));
+    return true;
+  }catch(e){ return false; }
+}
+let map, pendingLatLng = null, markers = {}, plants = {};
+
+function initMap(){
+  map = L.map('map', {zoomControl:false}).setView(getCampusCenter(), 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap katkıda bulunanlar'
+  }).addTo(map);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+
+  map.on('click', (e)=>{
+    document.getElementById('locResults').classList.remove('show');
+    if(window.innerWidth <= 760 && document.getElementById('sidebar').classList.contains('open')){
+      document.getElementById('sidebar').classList.remove('open');
+      return;
+    }
+    if(!currentUser){ showToast('Bitki eklemek için önce giriş yapmalısın'); return; }
+    pendingLatLng = e.latlng;
+    openAddModal();
+  });
+
+  loadPlants();
+  initLocationSearch();
+}
+
+// ---------- Yer / adres arama (Nominatim - OpenStreetMap) ----------
+let locSearchTimer = null;
+let locSearchController = null;
+let tempSearchMarker = null;
+
+function initLocationSearch(){
+  const input = document.getElementById('locSearchInput');
+  const resultsBox = document.getElementById('locResults');
+
+  input.addEventListener('input', ()=>{
+    clearTimeout(locSearchTimer);
+    const q = input.value.trim();
+    if(q.length < 3){
+      resultsBox.classList.remove('show');
+      resultsBox.innerHTML = '';
+      return;
+    }
+    locSearchTimer = setTimeout(()=> doLocationSearch(q), 450);
+  });
+
+  input.addEventListener('focus', ()=>{
+    if(resultsBox.innerHTML.trim() !== '') resultsBox.classList.add('show');
+  });
+}
+
+async function doLocationSearch(q){
+  const resultsBox = document.getElementById('locResults');
+  if(locSearchController) locSearchController.abort();
+  locSearchController = new AbortController();
+  resultsBox.innerHTML = `<div class="loc-result-item" style="color:var(--ink-soft);cursor:default;">Aranıyor…</div>`;
+  resultsBox.classList.add('show');
+  try{
+    const bias = `&viewbox=${CAMPUS_CENTER[1]-0.05},${CAMPUS_CENTER[0]+0.05},${CAMPUS_CENTER[1]+0.05},${CAMPUS_CENTER[0]-0.05}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=6&countrycodes=tr&addressdetails=0${bias}`;
+    const res = await fetch(url, {signal: locSearchController.signal});
+    const data = await res.json();
+    if(!data || data.length === 0){
+      resultsBox.innerHTML = `<div class="loc-result-item" style="color:var(--ink-soft);cursor:default;">Sonuç bulunamadı</div>`;
+      return;
+    }
+    resultsBox.innerHTML = data.map((r,i)=>`<div class="loc-result-item" data-idx="${i}">${escapeHtml(r.display_name)}</div>`).join('');
+    resultsBox.querySelectorAll('.loc-result-item').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const idx = parseInt(el.getAttribute('data-idx'), 10);
+        selectLocationResult(data[idx]);
+      });
+    });
+  }catch(e){
+    if(e.name !== 'AbortError'){
+      resultsBox.innerHTML = `<div class="loc-result-item" style="color:var(--rust);cursor:default;">Arama başarısız, tekrar dene</div>`;
+    }
+  }
+}
+
+function selectLocationResult(r){
+  if(!r) return;
+  const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+  map.flyTo([lat, lon], 18, {animate:true});
+  if(tempSearchMarker) map.removeLayer(tempSearchMarker);
+  tempSearchMarker = L.circleMarker([lat, lon], {
+    radius:9, color:'#A24E36', weight:2, fillColor:'#A24E36', fillOpacity:0.35
+  }).addTo(map);
+  tempSearchMarker.bindTooltip('Buraya bitki eklemek için dokun', {direction:'top', offset:[0,-10]});
+  tempSearchMarker.on('click', ()=>{
+    if(!currentUser){ showToast('Bitki eklemek için önce giriş yapmalısın'); return; }
+    pendingLatLng = L.latLng(lat, lon);
+    openAddModal();
+  });
+  document.getElementById('locResults').classList.remove('show');
+  document.getElementById('locSearchInput').value = r.display_name.split(',')[0];
+  document.getElementById('locSearchInput').blur();
+  showToast('Bulundu — turuncu işarete dokunarak buraya bitki ekleyebilirsin');
+
+  lastFoundLatLng = {lat, lng: lon};
+  const setCenterBtn = document.getElementById('setCenterBtn');
+  setCenterBtn.style.display = 'flex';
+}
+
+let lastFoundLatLng = null;
+document.getElementById('setCenterBtn').addEventListener('click', ()=>{
+  if(!lastFoundLatLng) return;
+  setCampusCenter(lastFoundLatLng.lat, lastFoundLatLng.lng);
+  showToast('Kampüs merkezi güncellendi 🏫 — "Kampüse Git" artık burayı gösterecek');
+  document.getElementById('setCenterBtn').style.display = 'none';
+});
+
+function leafIcon(isMe){
+  return L.divIcon({
+    className:'',
+    html:`<div class="leaf-marker${isMe?' me':''}"></div>`,
+    iconSize:[26,26],
+    iconAnchor:[13,24],
+    popupAnchor:[0,-22]
+  });
+}
+
+// ---------- Storage helpers (Firestore - herkes görür, sadece giriş yapan yazar) ----------
+function loadPlants(){
+  db.collection('plants').onSnapshot((snapshot)=>{
+    Object.values(markers).forEach(m=> map.removeLayer(m));
+    markers = {};
+    plants = {};
+    snapshot.forEach(docSnap=>{
+      const data = docSnap.data();
+      plants[docSnap.id] = data;
+      addMarker(docSnap.id, data);
+    });
+    renderSidebar();
+    hideHint(Object.keys(plants).length > 0);
+  }, (err)=>{
+    console.error('Kayıtlar dinlenemedi', err);
+    showToast('Kayıtlar yüklenirken bir sorun oluştu');
+  });
+}
+
+function addMarker(key, data){
+  const m = L.marker([data.lat, data.lng], {icon: leafIcon(false)}).addTo(map);
+  m.bindTooltip(data.nameTr || data.nameLatin || 'İsimlendirilmemiş kayıt', {direction:'top', offset:[0,-22]});
+  m.bindPopup(popupHtml(key, data));
+  m.on('popupopen', ()=>{
+    const btn = document.querySelector(`.detail-link[data-key="${CSS.escape(key)}"]`);
+    if(btn) btn.addEventListener('click', ()=>{ m.closePopup(); openDetail(key); });
+  });
+  markers[key] = m;
+}
+
+function popupHtml(key, d){
+  const accNo = 'İÜ.ECZ.' + key.replace('plant:','').slice(0,6);
+  const photos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
+  const nameTrDisplay = d.nameTr ? escapeHtml(d.nameTr) : 'İsimlendirilmemiş kayıt';
+  return `
+    <div class="herb-card${photos.length ? ' has-photo' : ''}">
+      ${photos.length ? `<img class="mini-photo" src="${photos[0]}">` : ''}
+      <span class="acc-no">No. ${accNo}</span>
+      <p class="name-tr">${nameTrDisplay}</p>
+      ${d.nameLatin ? `<p class="name-latin">${escapeHtml(d.nameLatin)}</p>` : ''}
+      ${d.family ? `<div class="family">Familya: ${escapeHtml(d.family)}</div>` : ''}
+      ${photos.length > 1 ? `<div class="extra-photo-note">+${photos.length-1} foto daha</div>` : ''}
+      <div class="card-actions">
+        <button class="detail-link" data-key="${key}" style="background:none;border:none;color:var(--green);font-weight:600;font-size:12.5px;cursor:pointer;text-decoration:underline;">Ayrıntıları gör →</button>
+      </div>
+    </div>
+  `;
+}
+
+let currentDetailPhotos = [];
+
+function detailHtml(key, d){
+  const accNo = 'İÜ.ECZ.' + key.replace('plant:','').slice(0,6);
+  const photos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
+  const nameTrDisplay = d.nameTr ? escapeHtml(d.nameTr) : 'İsimlendirilmemiş kayıt';
+  const heroPhoto = photos.length ? photos[0] : null;
+
+  return `
+    <div class="detail-hero">
+      ${heroPhoto
+        ? `<img src="${heroPhoto}" onclick="openPhotoSlider(currentDetailPhotos, 0)">`
+        : `<div class="no-photo-mark">🌿</div>`}
+      <div class="close-x" id="closeDetailBtn">✕</div>
+      <span class="acc-badge">No. ${accNo}</span>
+    </div>
+    <div class="detail-body">
+      <p class="name-tr">${nameTrDisplay}</p>
+      ${d.nameLatin ? `<p class="name-latin">${escapeHtml(d.nameLatin)}</p>` : ''}
+      ${d.family ? `<span class="classification-chip">🔬 Familya: ${escapeHtml(d.family)}</span>` : ''}
+
+      ${photos.length > 1 ? `
+        <div class="detail-gallery">
+          ${photos.map((p,i)=>`<img src="${p}" onclick="openPhotoSlider(currentDetailPhotos, ${i})">`).join('')}
+        </div>` : ''}
+
+      <div class="info-cards">
+        ${d.desc ? `
+        <div class="info-card">
+          <div class="label">Açıklama</div>
+          <div class="value">${escapeHtml(d.desc)}</div>
+        </div>` : ''}
+        <div class="info-card">
+          <div class="label">Konum (Enlem, Boylam)</div>
+          <div class="value">${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</div>
+        </div>
+      </div>
+
+      <div class="card-actions">
+        <button class="speak-link" id="speakBtn">🔊 Sesli Oku</button>
+        <button class="web-search-link">🔍 İnternette ara</button>
+        ${currentUser ? `<button class="edit-link" data-key="${key}">✏️ Düzenle</button>` : ''}
+        ${currentUser ? `<button class="del-link" data-key="${key}">kaydı sil</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function openDetail(key){
+  const d = plants[key];
+  if(!d) return;
+  stopSpeaking();
+  currentDetailPhotos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
+  const content = document.getElementById('detailContent');
+  content.innerHTML = detailHtml(key, d);
+  document.getElementById('closeDetailBtn').addEventListener('click', closeDetail);
+  const delBtn = content.querySelector('.del-link');
+  if(delBtn) delBtn.addEventListener('click', ()=>{ deletePlant(key); closeDetail(); });
+  const webBtn = content.querySelector('.web-search-link');
+  if(webBtn) webBtn.addEventListener('click', ()=> searchPlantOnline(d.nameLatin || d.nameTr));
+  const editBtn = content.querySelector('.edit-link');
+  if(editBtn) editBtn.addEventListener('click', ()=> openEditForm(key));
+  const speakBtn = content.querySelector('.speak-link');
+  if(speakBtn) speakBtn.addEventListener('click', ()=> toggleSpeak(d));
+  document.getElementById('detailOverlay').classList.remove('hidden');
+}
+
+function closeDetail(){
+  stopSpeaking();
+  document.getElementById('detailOverlay').classList.add('hidden');
+}
+
+// ---------- Kayıt düzenleme ----------
+let editPhotosDataUrls = [];
+
+function editFormHtml(d){
+  return `
+    <div class="detail-body">
+      <h2 style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:600;margin:4px 0 14px;">Kaydı Düzenle</h2>
+      <form id="editForm">
+        <div class="field">
+          <label>Türkçe / yaygın adı</label>
+          <input type="text" id="eName" value="${escapeHtml(d.nameTr||'')}" placeholder="opsiyonel">
+        </div>
+        <div class="field">
+          <label>Latince (bilimsel) adı</label>
+          <input type="text" class="latin-input" id="eLatin" value="${escapeHtml(d.nameLatin||'')}" placeholder="opsiyonel">
+        </div>
+        <div class="field">
+          <label>Familya</label>
+          <input type="text" id="eFamily" value="${escapeHtml(d.family||'')}" placeholder="opsiyonel">
+        </div>
+        <div class="field">
+          <label>Açıklama</label>
+          <textarea id="eDesc" placeholder="opsiyonel">${escapeHtml(d.desc||'')}</textarea>
+        </div>
+        <div class="field">
+          <label>Fotoğraflar</label>
+          <div class="photo-drop" id="editPhotoDrop">
+            <span id="editPhotoDropText">Fotoğraf eklemek için dokun</span>
+            <div class="photo-grid" id="editPhotoGrid"></div>
+            <input type="file" accept="image/*" id="editPhotoInput" multiple>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn cancel" id="editCancelBtn">Vazgeç</button>
+          <button type="submit" class="btn save">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function renderEditPhotoGrid(){
+  const grid = document.getElementById('editPhotoGrid');
+  if(!grid) return;
+  grid.innerHTML = editPhotosDataUrls.map((url, i)=>`
+    <div class="photo-thumb">
+      <img src="${url}">
+      <div class="remove-x" data-idx="${i}">✕</div>
+    </div>
+  `).join('');
+  grid.querySelectorAll('.remove-x').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      const idx = parseInt(btn.getAttribute('data-idx'), 10);
+      editPhotosDataUrls.splice(idx, 1);
+      renderEditPhotoGrid();
+      updateEditPhotoDropText();
+    });
+  });
+}
+
+function updateEditPhotoDropText(){
+  const label = document.getElementById('editPhotoDropText');
+  if(!label) return;
+  label.textContent = editPhotosDataUrls.length === 0
+    ? 'Fotoğraf eklemek için dokun'
+    : `${editPhotosDataUrls.length} fotoğraf — daha fazla eklemek için tekrar dokun`;
+}
+
+function openEditForm(key){
+  const d = plants[key];
+  if(!d) return;
+  stopSpeaking();
+  editPhotosDataUrls = (d.photos && d.photos.length) ? d.photos.slice() : (d.photo ? [d.photo] : []);
+  const content = document.getElementById('detailContent');
+  content.innerHTML = editFormHtml(d);
+  renderEditPhotoGrid();
+  updateEditPhotoDropText();
+
+  document.getElementById('editPhotoInput').addEventListener('change', async (e)=>{
+    const files = Array.from(e.target.files || []);
+    if(files.length === 0) return;
+    try{
+      const urls = await Promise.all(files.map(resizeImageFile));
+      editPhotosDataUrls = editPhotosDataUrls.concat(urls);
+      renderEditPhotoGrid();
+      updateEditPhotoDropText();
+    }catch(err){
+      showToast('Fotoğraf işlenemedi, tekrar dene');
+    }
+    e.target.value = '';
+  });
+
+  document.getElementById('editCancelBtn').addEventListener('click', ()=> openDetail(key));
+  document.getElementById('editForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    saveEditedPlant(key);
+  });
+}
+
+async function saveEditedPlant(key){
+  const d = plants[key];
+  if(!d) return;
+  if(!currentUser){ showToast('Düzenlemek için giriş yapmalısın'); return; }
+  const nameTr = document.getElementById('eName').value.trim();
+  const nameLatin = document.getElementById('eLatin').value.trim();
+  const family = document.getElementById('eFamily').value.trim();
+  const desc = document.getElementById('eDesc').value.trim();
+
+  const updated = Object.assign({}, d, {
+    nameTr, nameLatin, family, desc,
+    photos: editPhotosDataUrls.slice()
+  });
+  delete updated.photo;
+
+  try{
+    await db.collection('plants').doc(key).set(updated);
+    showToast('Kayıt güncellendi 🌿');
+    openDetail(key);
+  }catch(e){
+    console.error(e);
+    showToast('Güncellenemedi, tekrar dene');
+  }
+}
+
+// ---------- Sesli okuma (Text-to-Speech) ----------
+let currentUtterance = null;
+let cachedVoices = [];
+
+function loadVoicesCache(){
+  if('speechSynthesis' in window){
+    cachedVoices = window.speechSynthesis.getVoices();
+  }
+}
+if('speechSynthesis' in window){
+  loadVoicesCache();
+  window.speechSynthesis.onvoiceschanged = loadVoicesCache;
+}
+
+function pickBestTurkishVoice(){
+  const voices = cachedVoices.length ? cachedVoices : (('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : []);
+  const trVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('tr'));
+  if(trVoices.length === 0) return null;
+  return trVoices.find(v => /google/i.test(v.name) && v.localService === false)
+      || trVoices.find(v => v.localService === false)
+      || trVoices.find(v => /google/i.test(v.name))
+      || trVoices.find(v => /natural|enhanced|premium/i.test(v.name))
+      || trVoices[0];
+}
+
+function stopSpeaking(){
+  if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  currentUtterance = null;
+  const btn = document.getElementById('speakBtn');
+  if(btn){ btn.textContent = '🔊 Sesli Oku'; btn.classList.remove('speaking'); }
+}
+
+function toggleSpeak(d){
+  if(!('speechSynthesis' in window)){
+    showToast('Cihazın sesli okumayı desteklemiyor');
+    return;
+  }
+  const btn = document.getElementById('speakBtn');
+  if(window.speechSynthesis.speaking){
+    stopSpeaking();
+    return;
+  }
+  const parts = [];
+  if(d.nameTr) parts.push(d.nameTr);
+  if(d.nameLatin) parts.push('Latince adı: ' + d.nameLatin);
+  if(d.family) parts.push('Familya: ' + d.family);
+  if(d.desc) parts.push(d.desc);
+  const text = parts.join('. ');
+  if(!text.trim()){
+    showToast('Okunacak bir bilgi yok');
+    return;
+  }
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'tr-TR';
+  utter.rate = 0.98;
+  utter.pitch = 1.0;
+  const trVoice = pickBestTurkishVoice();
+  if(trVoice) utter.voice = trVoice;
+  utter.onend = ()=> stopSpeaking();
+  utter.onerror = ()=> stopSpeaking();
+  currentUtterance = utter;
+  if(btn){ btn.textContent = '⏹ Durdur'; btn.classList.add('speaking'); }
+  window.speechSynthesis.speak(utter);
+}
+
+// ---------- Tam ekran fotoğraf slider ----------
+let sliderPhotos = [];
+let sliderIndex = 0;
+
+function openPhotoSlider(photosArr, startIndex){
+  if(!photosArr || photosArr.length === 0) return;
+  sliderPhotos = photosArr;
+  sliderIndex = startIndex;
+  renderSlider();
+  document.getElementById('photoSliderOverlay').classList.remove('hidden');
+}
+
+function renderSlider(){
+  document.getElementById('sliderImg').src = sliderPhotos[sliderIndex];
+  document.getElementById('sliderCounter').textContent = `${sliderIndex+1} / ${sliderPhotos.length}`;
+  const showNav = sliderPhotos.length > 1;
+  document.getElementById('sliderPrev').style.display = showNav ? 'flex' : 'none';
+  document.getElementById('sliderNext').style.display = showNav ? 'flex' : 'none';
+}
+
+function closeSlider(){
+  document.getElementById('photoSliderOverlay').classList.add('hidden');
+}
+
+document.getElementById('closeSliderBtn').addEventListener('click', closeSlider);
+document.getElementById('sliderPrev').addEventListener('click', ()=>{
+  sliderIndex = (sliderIndex - 1 + sliderPhotos.length) % sliderPhotos.length;
+  renderSlider();
+});
+document.getElementById('sliderNext').addEventListener('click', ()=>{
+  sliderIndex = (sliderIndex + 1) % sliderPhotos.length;
+  renderSlider();
+});
+document.getElementById('photoSliderOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'photoSliderOverlay') closeSlider();
+});
+
+let sliderTouchStartX = null;
+document.getElementById('photoSliderOverlay').addEventListener('touchstart', (e)=>{
+  sliderTouchStartX = e.touches[0].clientX;
+});
+document.getElementById('photoSliderOverlay').addEventListener('touchend', (e)=>{
+  if(sliderTouchStartX === null) return;
+  const dx = e.changedTouches[0].clientX - sliderTouchStartX;
+  if(Math.abs(dx) > 40){
+    if(dx < 0) document.getElementById('sliderNext').click();
+    else document.getElementById('sliderPrev').click();
+  }
+  sliderTouchStartX = null;
+});
+
+
+document.getElementById('detailOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'detailOverlay') closeDetail();
+});
+
+function escapeHtml(s){
+  if(!s) return '';
+  return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function deletePlant(key){
+  if(!currentUser){ showToast('Silmek için giriş yapmalısın'); return; }
+  if(!confirm('Bu kayıt silinecek. Emin misin?')) return;
+  try{
+    await db.collection('plants').doc(key).delete();
+    showToast('Kayıt silindi');
+  }catch(e){
+    console.error(e);
+    showToast('Silinemedi, tekrar dene');
+  }
+}
+
+// ---------- Sidebar ----------
+function renderSidebar(){
+  const list = document.getElementById('specList');
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const entries = Object.entries(plants).sort((a,b)=> (b[1].addedAt||0)-(a[1].addedAt||0));
+  const filtered = entries.filter(([k,d])=>{
+    if(!q) return true;
+    return (d.nameTr||'').toLowerCase().includes(q) || (d.nameLatin||'').toLowerCase().includes(q);
+  });
+  document.getElementById('specCount').textContent = entries.length + ' kayıtlı tür';
+  if(filtered.length === 0){
+    list.innerHTML = `<div class="empty-note">${entries.length===0 ? 'Henüz kayıt yok. Haritaya dokunarak ilk bitkiyi ekle 🌿' : 'Sonuç bulunamadı.'}</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(([k,d])=>{
+    const accNo = 'İÜ.ECZ.' + k.replace('plant:','').slice(0,6);
+    const photoCount = (d.photos && d.photos.length) ? d.photos.length : (d.photo ? 1 : 0);
+    return `
+    <div class="spec-card" data-key="${k}">
+      <span class="acc-no">No. ${accNo}${photoCount ? ` · ${photoCount} foto` : ''}</span>
+      <p class="name-tr">${d.nameTr ? escapeHtml(d.nameTr) : 'İsimlendirilmemiş kayıt'}</p>
+      ${d.nameLatin ? `<p class="name-latin">${escapeHtml(d.nameLatin)}</p>` : ''}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.spec-card').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      const k = card.getAttribute('data-key');
+      const d = plants[k];
+      if(!d) return;
+      map.setView([d.lat,d.lng], 18, {animate:true});
+      if(markers[k]) markers[k].openPopup();
+      if(window.innerWidth <= 760) document.getElementById('sidebar').classList.remove('open');
+    });
+  });
+}
+document.getElementById('search').addEventListener('input', renderSidebar);
+
+// ---------- Add modal ----------
+const addOverlay = document.getElementById('addOverlay');
+function openAddModal(){
+  document.getElementById('coordLabel').textContent = pendingLatLng
+    ? `Konum: ${pendingLatLng.lat.toFixed(5)}, ${pendingLatLng.lng.toFixed(5)}`
+    : 'Konum seçilmedi — önce haritada bir noktaya dokun';
+  addOverlay.classList.remove('hidden');
+}
+function closeAddModal(){
+  addOverlay.classList.add('hidden');
+  document.getElementById('addForm').reset();
+  photosDataUrls = [];
+  renderPhotoGrid();
+  updatePhotoDropText();
+  pendingLatLng = null;
+}
+document.getElementById('addBtnHeader').addEventListener('click', ()=>{
+  if(!currentUser){ showToast('Bitki eklemek için önce giriş yapmalısın'); openLoginModal(); return; }
+  if(!pendingLatLng){
+    const c = map.getCenter();
+    pendingLatLng = c;
+  }
+  openAddModal();
+});
+document.getElementById('cancelAdd').addEventListener('click', closeAddModal);
+
+function searchPlantOnline(term){
+  if(!term){ showToast('Önce bir isim yaz'); return; }
+  const q = encodeURIComponent(term + ' bitki özellikleri');
+  window.open(`https://www.google.com/search?q=${q}`, '_blank');
+}
+
+let photosDataUrls = [];
+
+function renderPhotoGrid(){
+  const grid = document.getElementById('photoGrid');
+  grid.innerHTML = photosDataUrls.map((url, i)=>`
+    <div class="photo-thumb">
+      <img src="${url}">
+      <div class="remove-x" data-idx="${i}">✕</div>
+    </div>
+  `).join('');
+  grid.querySelectorAll('.remove-x').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      const idx = parseInt(btn.getAttribute('data-idx'), 10);
+      photosDataUrls.splice(idx, 1);
+      renderPhotoGrid();
+      updatePhotoDropText();
+    });
+  });
+}
+
+function updatePhotoDropText(){
+  const label = document.getElementById('photoDropText');
+  label.textContent = photosDataUrls.length === 0
+    ? 'Cihazdan fotoğraf(lar) seçmek için dokun'
+    : `${photosDataUrls.length} fotoğraf eklendi — daha fazla eklemek için tekrar dokun`;
+}
+
+function resizeImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxW = 800;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('fPhoto').addEventListener('change', async (e)=>{
+  const files = Array.from(e.target.files || []);
+  if(files.length === 0) return;
+  try{
+    const urls = await Promise.all(files.map(resizeImageFile));
+    photosDataUrls = photosDataUrls.concat(urls);
+    renderPhotoGrid();
+    updatePhotoDropText();
+  }catch(err){
+    showToast('Fotoğraf işlenemedi, tekrar dene');
+  }
+  e.target.value = '';
+});
+
+document.getElementById('addForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  if(!currentUser){ showToast('Bitki eklemek için giriş yapmalısın'); return; }
+  if(!pendingLatLng){ showToast('Önce haritada bir konum seç'); return; }
+  const nameTr = document.getElementById('fName').value.trim();
+  const nameLatin = document.getElementById('fLatin').value.trim();
+  const family = document.getElementById('fFamily').value.trim();
+  const desc = document.getElementById('fDesc').value.trim();
+  if(!nameTr && !nameLatin && photosDataUrls.length===0 && !desc){ showToast('En az bir bilgi veya fotoğraf ekle'); return; }
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor…';
+
+  const key = 'plant:' + Date.now() + Math.random().toString(36).slice(2,8);
+  const data = {
+    lat: pendingLatLng.lat, lng: pendingLatLng.lng,
+    nameTr, nameLatin, family, desc,
+    photos: photosDataUrls.slice(), addedAt: Date.now()
+  };
+  try{
+    await db.collection('plants').doc(key).set(data);
+    hideHint(true);
+    closeAddModal();
+    showToast('Kayıt eklendi 🌿');
+  }catch(err){
+    console.error(err);
+    showToast('Kaydedilemedi, tekrar dene');
+  }finally{
+    saveBtn.disabled = false; saveBtn.textContent = 'Kaydet';
+  }
+});
+
+function hideHint(force){
+  const banner = document.getElementById('hintBanner');
+  if(Object.keys(plants).length > 0 || force) banner.style.display = 'none';
+}
+
+// ---------- Locate ----------
+document.getElementById('goCampusBtn').addEventListener('click', ()=>{
+  map.flyTo(getCampusCenter(), 17, {animate:true});
+  showToast('Eczacılık Fakültesi kampüsüne dönüldü');
+});
+
+// ---------- Giriş / Çıkış (Firebase Auth) ----------
+const loginOverlay = document.getElementById('loginOverlay');
+const authBtn = document.getElementById('authBtn');
+
+function openLoginModal(){
+  loginOverlay.classList.remove('hidden');
+}
+function closeLoginModal(){
+  loginOverlay.classList.add('hidden');
+  document.getElementById('loginForm').reset();
+}
+document.getElementById('loginCancelBtn').addEventListener('click', closeLoginModal);
+loginOverlay.addEventListener('click', (e)=>{
+  if(e.target.id === 'loginOverlay') closeLoginModal();
+});
+
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Giriş yapılıyor…';
+
+  const timeoutPromise = new Promise((_, reject)=>{
+    setTimeout(()=> reject(new Error('timeout')), 8000);
+  });
+
+  try{
+    await Promise.race([
+      auth.signInWithEmailAndPassword(email, password),
+      timeoutPromise
+    ]);
+    closeLoginModal();
+    showToast('Giriş başarılı 🔓');
+  }catch(err){
+    console.error(err);
+    if(err.message === 'timeout'){
+      showToast('Giriş zaman aşımına uğradı — dosyayı file:// yerine yayına alınmış linkten aç');
+    }else{
+      showToast('Giriş başarısız — e-posta/şifreyi kontrol et');
+    }
+  }finally{
+    btn.disabled = false; btn.textContent = 'Giriş Yap';
+  }
+});
+
+authBtn.addEventListener('click', async ()=>{
+  if(currentUser){
+    if(confirm('Çıkış yapmak istediğine emin misin?')){
+      await auth.signOut();
+      showToast('Çıkış yapıldı');
+    }
+  }else{
+    openLoginModal();
+  }
+});
+
+function updateAuthUI(){
+  if(currentUser){
+    authBtn.textContent = '🔓 Çıkış Yap';
+  }else{
+    authBtn.textContent = '🔐 Giriş Yap';
+  }
+}
+
+auth.onAuthStateChanged((user)=>{
+  currentUser = user;
+  updateAuthUI();
+});
+
+document.getElementById('locateBtn').addEventListener('click', ()=>{
+  if(!navigator.geolocation){ showToast('Konum servisi desteklenmiyor'); return; }
+  navigator.geolocation.getCurrentPosition((pos)=>{
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    map.setView(ll, 18);
+    L.marker(ll, {icon: leafIcon(true)}).addTo(map).bindPopup('Buradasın').openPopup();
+  }, ()=>{
+    showToast('Konuma erişilemedi');
+  });
+});
+
+// ---------- Sidebar toggle (mobile) ----------
+document.getElementById('toggleSidebar').addEventListener('click', ()=>{
+  document.getElementById('sidebar').classList.toggle('open');
+});
+
+// ---------- Toast ----------
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+initMap();
+</script>
+</body>
+</html>

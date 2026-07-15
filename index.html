@@ -359,6 +359,33 @@
     z-index:5;cursor:pointer;border:1.5px solid var(--cream);
   }
   .photo-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+
+  .audio-drop{
+    border:1.5px dashed var(--line);
+    border-radius:2px;
+    padding:12px;
+    text-align:center;
+    font-size:12px;
+    color:var(--ink-soft);
+    cursor:pointer;
+    position:relative;
+  }
+  .audio-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .audio-preview-wrap{margin-top:10px;position:relative;z-index:2;}
+  .audio-preview-wrap audio{width:100%;}
+  .remove-audio-btn{
+    margin-top:8px;
+    width:100%;
+    padding:7px;
+    border:1px solid var(--rust);
+    background:none;
+    color:var(--rust);
+    border-radius:3px;
+    font-family:'Work Sans',sans-serif;
+    font-size:12.5px;
+    cursor:pointer;
+    position:relative;z-index:3;
+  }
   .modal-actions{display:flex;gap:8px;margin-top:16px;}
   .btn{
     flex:1;padding:10px;border-radius:3px;border:1px solid var(--line);
@@ -592,6 +619,17 @@
           <span id="photoDropText">Cihazdan fotoğraf(lar) seçmek için dokun</span>
           <div class="photo-grid" id="photoGrid"></div>
           <input type="file" accept="image/*" id="fPhoto" multiple>
+        </div>
+      </div>
+      <div class="field">
+        <label>Sesli açıklama (opsiyonel — önceden kaydedilmiş ses dosyası yükle)</label>
+        <div class="audio-drop" id="audioDrop">
+          <span id="audioDropText">Cihazdan ses dosyası seçmek için dokun</span>
+          <div id="audioPreviewWrap" class="audio-preview-wrap" style="display:none;">
+            <audio id="audioPreview" controls></audio>
+            <button type="button" id="removeAudioBtn" class="remove-audio-btn">🗑️ Dosyayı Kaldır</button>
+          </div>
+          <input type="file" accept="audio/*" id="fAudio">
         </div>
       </div>
       <div class="modal-actions">
@@ -875,6 +913,11 @@ function detailHtml(key, d){
         </div>` : ''}
 
       <div class="info-cards">
+        ${d.audio ? `
+        <div class="info-card">
+          <div class="label">🎙️ Kaydedilmiş Sesli Açıklama</div>
+          <audio controls src="${d.audio}" style="width:100%;margin-top:4px;"></audio>
+        </div>` : ''}
         ${d.desc ? `
         <div class="info-card">
           <div class="label">Açıklama</div>
@@ -900,6 +943,7 @@ function openDetail(key){
   const d = plants[key];
   if(!d) return;
   stopSpeaking();
+  cancelActiveRecording();
   currentDetailPhotos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
   const content = document.getElementById('detailContent');
   content.innerHTML = detailHtml(key, d);
@@ -917,6 +961,7 @@ function openDetail(key){
 
 function closeDetail(){
   stopSpeaking();
+  cancelActiveRecording();
   document.getElementById('detailOverlay').classList.add('hidden');
 }
 
@@ -950,6 +995,17 @@ function editFormHtml(d){
             <span id="editPhotoDropText">Fotoğraf eklemek için dokun</span>
             <div class="photo-grid" id="editPhotoGrid"></div>
             <input type="file" accept="image/*" id="editPhotoInput" multiple>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sesli açıklama (opsiyonel — önceden kaydedilmiş ses dosyası yükle)</label>
+          <div class="audio-drop" id="editAudioDrop">
+            <span id="editAudioDropText">Cihazdan ses dosyası seçmek için dokun</span>
+            <div id="editAudioPreviewWrap" class="audio-preview-wrap" style="display:none;">
+              <audio id="editAudioPreview" controls></audio>
+              <button type="button" id="editRemoveAudioBtn" class="remove-audio-btn">🗑️ Dosyayı Kaldır</button>
+            </div>
+            <input type="file" accept="audio/*" id="editFAudio">
           </div>
         </div>
         <div class="modal-actions">
@@ -995,10 +1051,12 @@ function openEditForm(key){
   if(!d) return;
   stopSpeaking();
   editPhotosDataUrls = (d.photos && d.photos.length) ? d.photos.slice() : (d.photo ? [d.photo] : []);
+  editAudioDataUrl = d.audio || null;
   const content = document.getElementById('detailContent');
   content.innerHTML = editFormHtml(d);
   renderEditPhotoGrid();
   updateEditPhotoDropText();
+  renderAudioPreview('edit');
 
   document.getElementById('editPhotoInput').addEventListener('change', async (e)=>{
     const files = Array.from(e.target.files || []);
@@ -1014,7 +1072,13 @@ function openEditForm(key){
     e.target.value = '';
   });
 
-  document.getElementById('editCancelBtn').addEventListener('click', ()=> openDetail(key));
+  document.getElementById('editFAudio').addEventListener('change', (e)=>{
+    const file = e.target.files && e.target.files[0];
+    if(file) handleAudioFile(file, 'edit');
+  });
+  document.getElementById('editRemoveAudioBtn').addEventListener('click', ()=> removeAudio('edit'));
+
+  document.getElementById('editCancelBtn').addEventListener('click', ()=>{ cancelActiveRecording(); openDetail(key); });
   document.getElementById('editForm').addEventListener('submit', (e)=>{
     e.preventDefault();
     saveEditedPlant(key);
@@ -1032,12 +1096,14 @@ async function saveEditedPlant(key){
 
   const updated = Object.assign({}, d, {
     nameTr, nameLatin, family, desc,
-    photos: editPhotosDataUrls.slice()
+    photos: editPhotosDataUrls.slice(),
+    audio: editAudioDataUrl || null
   });
   delete updated.photo;
 
   try{
     await db.collection('plants').doc(key).set(updated);
+    cancelActiveRecording();
     showToast('Kayıt güncellendi 🌿');
     openDetail(key);
   }catch(e){
@@ -1230,11 +1296,14 @@ function openAddModal(){
   addOverlay.classList.remove('hidden');
 }
 function closeAddModal(){
+  cancelActiveRecording();
   addOverlay.classList.add('hidden');
   document.getElementById('addForm').reset();
   photosDataUrls = [];
+  addAudioDataUrl = null;
   renderPhotoGrid();
   updatePhotoDropText();
+  renderAudioPreview('add');
   pendingLatLng = null;
 }
 document.getElementById('addBtnHeader').addEventListener('click', ()=>{
@@ -1305,6 +1374,68 @@ function resizeImageFile(file){
   });
 }
 
+// ---------- Ses dosyası yükleme (önceden kaydedilmiş) ----------
+let addAudioDataUrl = null;
+let editAudioDataUrl = null;
+const MAX_AUDIO_BYTES = 900 * 1024; // ~900KB güvenlik payı (Firestore doküman limiti 1MB)
+
+function getAudioEls(target){
+  const prefix = target === 'edit' ? 'edit' : '';
+  return {
+    dropText: document.getElementById(prefix ? 'editAudioDropText' : 'audioDropText'),
+    wrap: document.getElementById(prefix ? 'editAudioPreviewWrap' : 'audioPreviewWrap'),
+    player: document.getElementById(prefix ? 'editAudioPreview' : 'audioPreview'),
+    input: document.getElementById(prefix ? 'editFAudio' : 'fAudio')
+  };
+}
+
+function handleAudioFile(file, target){
+  if(!file) return;
+  if(file.size > MAX_AUDIO_BYTES){
+    showToast('Ses dosyası çok büyük (max ~900 KB) — daha kısa/küçük bir dosya seç');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    if(target === 'edit'){ editAudioDataUrl = reader.result; }
+    else{ addAudioDataUrl = reader.result; }
+    renderAudioPreview(target);
+  };
+  reader.onerror = ()=> showToast('Ses dosyası okunamadı, tekrar dene');
+  reader.readAsDataURL(file);
+}
+
+function renderAudioPreview(target){
+  const els = getAudioEls(target);
+  const url = target === 'edit' ? editAudioDataUrl : addAudioDataUrl;
+  if(!els.wrap) return;
+  if(url){
+    els.player.src = url;
+    els.wrap.style.display = 'block';
+    if(els.dropText) els.dropText.textContent = 'Ses dosyası eklendi — değiştirmek için tekrar dokun';
+  }else{
+    els.player.src = '';
+    els.wrap.style.display = 'none';
+    if(els.dropText) els.dropText.textContent = 'Cihazdan ses dosyası seçmek için dokun';
+  }
+}
+
+function removeAudio(target){
+  if(target === 'edit'){ editAudioDataUrl = null; } else { addAudioDataUrl = null; }
+  const els = getAudioEls(target);
+  if(els.input) els.input.value = '';
+  renderAudioPreview(target);
+}
+
+function cancelActiveRecording(){} // kayıt modu kaldırıldı, uyumluluk için boş bırakıldı
+
+document.getElementById('fAudio').addEventListener('change', (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if(file) handleAudioFile(file, 'add');
+});
+document.getElementById('removeAudioBtn').addEventListener('click', ()=> removeAudio('add'));
+
+
 document.getElementById('fPhoto').addEventListener('change', async (e)=>{
   const files = Array.from(e.target.files || []);
   if(files.length === 0) return;
@@ -1336,7 +1467,7 @@ document.getElementById('addForm').addEventListener('submit', async (e)=>{
   const data = {
     lat: pendingLatLng.lat, lng: pendingLatLng.lng,
     nameTr, nameLatin, family, desc,
-    photos: photosDataUrls.slice(), addedAt: Date.now()
+    photos: photosDataUrls.slice(), audio: addAudioDataUrl || null, addedAt: Date.now()
   };
   try{
     await db.collection('plants').doc(key).set(data);

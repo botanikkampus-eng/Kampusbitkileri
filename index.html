@@ -696,30 +696,46 @@ try{
 }catch(e){}
 let currentUser = null;
 
-const CAMPUS_CENTER = [38.3342, 38.4381]; // İnönü Üniversitesi Merkez Kampüsü, Battalgazi/Malatya (varsayılan - kullanıcı arama ile düzeltebilir)
-const CENTER_OVERRIDE_KEY = 'kampus-bitkileri-merkez-override';
+const CAMPUS_CENTER = [38.3342, 38.4381]; // İnönü Üniversitesi Merkez Kampüsü, Battalgazi/Malatya (varsayılan - Firestore'daki paylaşılan ayar bunu ezebilir)
+let campusCenterOverride = null; // Firestore'dan yüklenince doldurulur, herkes için ortak
 
 function getCampusCenter(){
-  try{
-    const raw = localStorage.getItem(CENTER_OVERRIDE_KEY);
-    if(raw){
-      const p = JSON.parse(raw);
-      if(typeof p.lat === 'number' && typeof p.lng === 'number') return [p.lat, p.lng];
-    }
-  }catch(e){}
-  return CAMPUS_CENTER;
+  return campusCenterOverride || CAMPUS_CENTER;
 }
 
-function setCampusCenter(lat, lng){
+function loadCampusCenterOverride(){
+  db.collection('settings').doc('campusCenter').get().then((docSnap)=>{
+    if(docSnap.exists){
+      const d = docSnap.data();
+      if(typeof d.lat === 'number' && typeof d.lng === 'number'){
+        campusCenterOverride = [d.lat, d.lng];
+        if(map) map.setView(campusCenterOverride, 17);
+      }
+    }
+  }).catch((err)=>{
+    console.error('Kampüs merkezi ayarı okunamadı', err);
+  });
+}
+
+async function setCampusCenter(lat, lng){
+  if(!currentUser){
+    showToast('Kampüs merkezini ayarlamak için giriş yapmalısın');
+    return false;
+  }
   try{
-    localStorage.setItem(CENTER_OVERRIDE_KEY, JSON.stringify({lat, lng}));
+    await db.collection('settings').doc('campusCenter').set({lat, lng});
+    campusCenterOverride = [lat, lng];
     return true;
-  }catch(e){ return false; }
+  }catch(e){
+    console.error(e);
+    return false;
+  }
 }
 let map, pendingLatLng = null, markers = {}, plants = {};
 
 function initMap(){
   map = L.map('map', {zoomControl:false}).setView(getCampusCenter(), 16);
+  loadCampusCenterOverride();
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap katkıda bulunanlar'
@@ -820,11 +836,16 @@ function selectLocationResult(r){
 }
 
 let lastFoundLatLng = null;
-document.getElementById('setCenterBtn').addEventListener('click', ()=>{
+document.getElementById('setCenterBtn').addEventListener('click', async ()=>{
   if(!lastFoundLatLng) return;
-  setCampusCenter(lastFoundLatLng.lat, lastFoundLatLng.lng);
-  showToast('Kampüs merkezi güncellendi 🏫 — "Kampüse Git" artık burayı gösterecek');
-  document.getElementById('setCenterBtn').style.display = 'none';
+  const btn = document.getElementById('setCenterBtn');
+  btn.disabled = true;
+  const ok = await setCampusCenter(lastFoundLatLng.lat, lastFoundLatLng.lng);
+  btn.disabled = false;
+  if(ok){
+    showToast('Kampüs merkezi herkes için güncellendi 🏫');
+    btn.style.display = 'none';
+  }
 });
 
 function leafIcon(isMe){

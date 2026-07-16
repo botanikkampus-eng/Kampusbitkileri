@@ -1062,6 +1062,12 @@ function closeDetail(){
   stopSpeaking();
   cancelActiveRecording();
   document.getElementById('detailOverlay').classList.add('hidden');
+  const content = document.getElementById('detailContent');
+  content.querySelectorAll('iframe').forEach(f=>{
+    const src = f.src;
+    f.src = '';
+    f.src = src;
+  });
 }
 
 // ---------- Kayıt düzenleme ----------

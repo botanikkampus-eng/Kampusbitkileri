@@ -1063,11 +1063,7 @@ function closeDetail(){
   cancelActiveRecording();
   document.getElementById('detailOverlay').classList.add('hidden');
   const content = document.getElementById('detailContent');
-  content.querySelectorAll('iframe').forEach(f=>{
-    const src = f.src;
-    f.src = '';
-    f.src = src;
-  });
+  content.querySelectorAll('iframe').forEach(f=> f.remove());
 }
 
 // ---------- Kayıt düzenleme ----------

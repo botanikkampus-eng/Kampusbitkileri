@@ -961,7 +961,7 @@ function popupHtml(key, d){
   `;
 }
 
-let currentDetailPhotos = [];
+window.currentDetailPhotos = [];
 
 function detailHtml(key, d){
   const accNo = 'İÜ.ECZ.' + key.replace('plant:','').slice(0,6);
@@ -1031,7 +1031,7 @@ function openDetail(key){
   if(!d) return;
   stopSpeaking();
   cancelActiveRecording();
-  currentDetailPhotos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
+  window.currentDetailPhotos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
   const content = document.getElementById('detailContent');
   content.innerHTML = detailHtml(key, d);
   document.getElementById('closeDetailBtn').addEventListener('click', closeDetail);
@@ -1305,6 +1305,7 @@ function openPhotoSlider(photosArr, startIndex){
   renderSlider();
   document.getElementById('photoSliderOverlay').classList.remove('hidden');
 }
+window.openPhotoSlider = openPhotoSlider;
 
 function renderSlider(){
   document.getElementById('sliderImg').src = sliderPhotos[sliderIndex];

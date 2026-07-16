@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Kampüs Bitkileri</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Work+Sans:wght@400;500;600;700&family=Special+Elite&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -243,6 +246,21 @@
     box-shadow:0 2px 4px rgba(0,0,0,0.35);
   }
   .leaf-marker.me{background:var(--rust);}
+
+  /* ---------- Marker cluster (botanik tema) ---------- */
+  .herb-cluster{
+    display:flex;align-items:center;justify-content:center;
+    border-radius:50%;
+    background:var(--green);
+    border:3px solid rgba(237,230,211,0.85);
+    box-shadow:0 2px 8px rgba(34,48,28,0.4);
+    color:#fff;
+    font-family:'Work Sans',sans-serif;
+    font-weight:700;
+  }
+  .herb-cluster.cluster-sm{width:36px;height:36px;font-size:13px;}
+  .herb-cluster.cluster-md{width:44px;height:44px;font-size:15px;background:var(--ochre);color:var(--green-dark);}
+  .herb-cluster.cluster-lg{width:52px;height:52px;font-size:17px;background:var(--rust);}
 
   /* ---------- Leaflet popup / herbarium card ---------- */
   .leaflet-popup-content-wrapper{
@@ -521,6 +539,21 @@
     font-size:13.5px;line-height:1.6;color:var(--ink);
     white-space:pre-wrap;
   }
+  .info-card .value a{color:var(--green);word-break:break-all;}
+  .yt-embed-wrap{
+    position:relative;
+    width:100%;
+    padding-top:56.25%;
+    margin-top:6px;
+    border-radius:2px;
+    overflow:hidden;
+    background:#000;
+  }
+  .yt-embed-wrap iframe{
+    position:absolute;top:0;left:0;
+    width:100%;height:100%;
+    border:0;
+  }
   .detail-body .card-actions{
     display:flex;flex-wrap:wrap;gap:8px;
     justify-content:space-between;align-items:center;
@@ -612,6 +645,10 @@
       <div class="field">
         <label>Açıklama</label>
         <textarea id="fDesc" placeholder="Kullanım alanı, etken maddesi, ayırt edici özellikleri…"></textarea>
+      </div>
+      <div class="field">
+        <label>YouTube linki (opsiyonel)</label>
+        <input type="url" id="fYoutube" placeholder="https://www.youtube.com/watch?v=...">
       </div>
       <div class="field">
         <label>Fotoğraf</label>
@@ -731,7 +768,7 @@ async function setCampusCenter(lat, lng){
     return false;
   }
 }
-let map, pendingLatLng = null, markers = {}, plants = {};
+let map, pendingLatLng = null, markers = {}, plants = {}, clusterGroup = null;
 
 function initMap(){
   map = L.map('map', {zoomControl:false}).setView(getCampusCenter(), 16);
@@ -741,6 +778,22 @@ function initMap(){
     attribution: '&copy; OpenStreetMap katkıda bulunanlar'
   }).addTo(map);
   L.control.zoom({position:'bottomright'}).addTo(map);
+
+  clusterGroup = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    iconCreateFunction: function(cluster){
+      const count = cluster.getChildCount();
+      let sizeClass = 'cluster-sm';
+      if(count >= 50) sizeClass = 'cluster-lg';
+      else if(count >= 10) sizeClass = 'cluster-md';
+      return L.divIcon({
+        html: `<div class="herb-cluster ${sizeClass}"><span>${count}</span></div>`,
+        className: '',
+        iconSize: L.point(40, 40)
+      });
+    }
+  });
+  map.addLayer(clusterGroup);
 
   map.on('click', (e)=>{
     document.getElementById('locResults').classList.remove('show');
@@ -861,7 +914,7 @@ function leafIcon(isMe){
 // ---------- Storage helpers (Firestore - herkes görür, sadece giriş yapan yazar) ----------
 function loadPlants(){
   db.collection('plants').onSnapshot((snapshot)=>{
-    Object.values(markers).forEach(m=> map.removeLayer(m));
+    clusterGroup.clearLayers();
     markers = {};
     plants = {};
     snapshot.forEach(docSnap=>{
@@ -878,13 +931,14 @@ function loadPlants(){
 }
 
 function addMarker(key, data){
-  const m = L.marker([data.lat, data.lng], {icon: leafIcon(false)}).addTo(map);
+  const m = L.marker([data.lat, data.lng], {icon: leafIcon(false)});
   m.bindTooltip(data.nameTr || data.nameLatin || 'İsimlendirilmemiş kayıt', {direction:'top', offset:[0,-22]});
   m.bindPopup(popupHtml(key, data));
   m.on('popupopen', ()=>{
     const btn = document.querySelector(`.detail-link[data-key="${CSS.escape(key)}"]`);
     if(btn) btn.addEventListener('click', ()=>{ m.closePopup(); openDetail(key); });
   });
+  clusterGroup.addLayer(m);
   markers[key] = m;
 }
 
@@ -914,6 +968,7 @@ function detailHtml(key, d){
   const photos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
   const nameTrDisplay = d.nameTr ? escapeHtml(d.nameTr) : 'İsimlendirilmemiş kayıt';
   const heroPhoto = photos.length ? photos[0] : null;
+  const ytId = getYoutubeVideoId(d.youtubeUrl);
 
   return `
     <div class="detail-hero">
@@ -934,11 +989,22 @@ function detailHtml(key, d){
         </div>` : ''}
 
       <div class="info-cards">
-        ${d.audio ? `
+        ${ytId ? `
+        <div class="info-card">
+          <div class="label">▶️ İlgili Video (YouTube)</div>
+          <div class="yt-embed-wrap">
+            <iframe src="https://www.youtube.com/embed/${ytId}" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          </div>
+        </div>` : (d.youtubeUrl ? `
+        <div class="info-card">
+          <div class="label">▶️ İlgili Video</div>
+          <div class="value"><a href="${escapeHtml(d.youtubeUrl)}" target="_blank" rel="noopener">${escapeHtml(d.youtubeUrl)}</a></div>
+        </div>` : '')}
+        <div id="detailAudioSlot">${d.audio ? `
         <div class="info-card">
           <div class="label">🎙️ Kaydedilmiş Sesli Açıklama</div>
           <audio controls src="${d.audio}" style="width:100%;margin-top:4px;"></audio>
-        </div>` : ''}
+        </div>` : ''}</div>
         ${d.desc ? `
         <div class="info-card">
           <div class="label">Açıklama</div>
@@ -978,6 +1044,18 @@ function openDetail(key){
   const speakBtn = content.querySelector('.speak-link');
   if(speakBtn) speakBtn.addEventListener('click', ()=> toggleSpeak(d));
   document.getElementById('detailOverlay').classList.remove('hidden');
+
+  db.collection('audios').doc(key).get().then((docSnap)=>{
+    const slot = document.getElementById('detailAudioSlot');
+    if(!slot) return;
+    if(docSnap.exists && docSnap.data().audio){
+      slot.innerHTML = `
+        <div class="info-card">
+          <div class="label">🎙️ Kaydedilmiş Sesli Açıklama</div>
+          <audio controls src="${docSnap.data().audio}" style="width:100%;margin-top:4px;"></audio>
+        </div>`;
+    }
+  }).catch(()=>{});
 }
 
 function closeDetail(){
@@ -1009,6 +1087,10 @@ function editFormHtml(d){
         <div class="field">
           <label>Açıklama</label>
           <textarea id="eDesc" placeholder="opsiyonel">${escapeHtml(d.desc||'')}</textarea>
+        </div>
+        <div class="field">
+          <label>YouTube linki (opsiyonel)</label>
+          <input type="url" id="eYoutube" value="${escapeHtml(d.youtubeUrl||'')}" placeholder="https://www.youtube.com/watch?v=...">
         </div>
         <div class="field">
           <label>Fotoğraflar</label>
@@ -1072,12 +1154,19 @@ function openEditForm(key){
   if(!d) return;
   stopSpeaking();
   editPhotosDataUrls = (d.photos && d.photos.length) ? d.photos.slice() : (d.photo ? [d.photo] : []);
-  editAudioDataUrl = d.audio || null;
+  editAudioDataUrl = d.audio || null; // eski kayıtlarla geriye dönük uyumluluk
   const content = document.getElementById('detailContent');
   content.innerHTML = editFormHtml(d);
   renderEditPhotoGrid();
   updateEditPhotoDropText();
   renderAudioPreview('edit');
+
+  db.collection('audios').doc(key).get().then((docSnap)=>{
+    if(docSnap.exists){
+      editAudioDataUrl = docSnap.data().audio || null;
+      renderAudioPreview('edit');
+    }
+  }).catch(()=>{});
 
   document.getElementById('editPhotoInput').addEventListener('change', async (e)=>{
     const files = Array.from(e.target.files || []);
@@ -1114,17 +1203,18 @@ async function saveEditedPlant(key){
   const nameLatin = document.getElementById('eLatin').value.trim();
   const family = document.getElementById('eFamily').value.trim();
   const desc = document.getElementById('eDesc').value.trim();
+  const youtubeUrl = document.getElementById('eYoutube').value.trim();
 
   const updated = Object.assign({}, d, {
-    nameTr, nameLatin, family, desc,
-    photos: editPhotosDataUrls.slice(),
-    audio: editAudioDataUrl || null
+    nameTr, nameLatin, family, desc, youtubeUrl,
+    photos: editPhotosDataUrls.slice()
   });
   delete updated.photo;
+  delete updated.audio;
 
   try{
     await db.collection('plants').doc(key).set(updated);
-    cancelActiveRecording();
+    await saveAudioForKey(key, editAudioDataUrl);
     showToast('Kayıt güncellendi 🌿');
     openDetail(key);
   }catch(e){
@@ -1259,11 +1349,29 @@ function escapeHtml(s){
   return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function getYoutubeVideoId(url){
+  if(!url) return null;
+  try{
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=)([\w-]{11})/,
+      /(?:youtu\.be\/)([\w-]{11})/,
+      /(?:youtube\.com\/embed\/)([\w-]{11})/,
+      /(?:youtube\.com\/shorts\/)([\w-]{11})/
+    ];
+    for(const p of patterns){
+      const m = url.match(p);
+      if(m) return m[1];
+    }
+  }catch(e){}
+  return null;
+}
+
 async function deletePlant(key){
   if(!currentUser){ showToast('Silmek için giriş yapmalısın'); return; }
   if(!confirm('Bu kayıt silinecek. Emin misin?')) return;
   try{
     await db.collection('plants').doc(key).delete();
+    await db.collection('audios').doc(key).delete().catch(()=>{});
     showToast('Kayıt silindi');
   }catch(e){
     console.error(e);
@@ -1398,7 +1506,20 @@ function resizeImageFile(file){
 // ---------- Ses dosyası yükleme (önceden kaydedilmiş) ----------
 let addAudioDataUrl = null;
 let editAudioDataUrl = null;
-const MAX_AUDIO_BYTES = 900 * 1024; // ~900KB güvenlik payı (Firestore doküman limiti 1MB)
+const MAX_AUDIO_BYTES = 950 * 1024; // ~950KB güvenlik payı (ses artık kendi ayrı kaydında, Firestore doküman limiti 1MB)
+
+async function saveAudioForKey(key, dataUrl){
+  try{
+    if(dataUrl){
+      await db.collection('audios').doc(key).set({audio: dataUrl});
+    }else{
+      await db.collection('audios').doc(key).delete().catch(()=>{});
+    }
+  }catch(e){
+    console.error('Ses kaydedilemedi', e);
+    showToast('Ses dosyası kaydedilemedi ama bitki kaydı başarıyla kaydedildi');
+  }
+}
 
 function getAudioEls(target){
   const prefix = target === 'edit' ? 'edit' : '';
@@ -1413,7 +1534,7 @@ function getAudioEls(target){
 function handleAudioFile(file, target){
   if(!file) return;
   if(file.size > MAX_AUDIO_BYTES){
-    showToast('Ses dosyası çok büyük (max ~900 KB) — daha kısa/küçük bir dosya seç');
+    showToast('Ses dosyası çok büyük (max ~950 KB) — daha kısa bir kayıt veya daha sıkıştırılmış format seç');
     return;
   }
   const reader = new FileReader();
@@ -1479,6 +1600,7 @@ document.getElementById('addForm').addEventListener('submit', async (e)=>{
   const nameLatin = document.getElementById('fLatin').value.trim();
   const family = document.getElementById('fFamily').value.trim();
   const desc = document.getElementById('fDesc').value.trim();
+  const youtubeUrl = document.getElementById('fYoutube').value.trim();
   if(!nameTr && !nameLatin && photosDataUrls.length===0 && !desc){ showToast('En az bir bilgi veya fotoğraf ekle'); return; }
 
   const saveBtn = document.getElementById('saveBtn');
@@ -1487,11 +1609,12 @@ document.getElementById('addForm').addEventListener('submit', async (e)=>{
   const key = 'plant:' + Date.now() + Math.random().toString(36).slice(2,8);
   const data = {
     lat: pendingLatLng.lat, lng: pendingLatLng.lng,
-    nameTr, nameLatin, family, desc,
-    photos: photosDataUrls.slice(), audio: addAudioDataUrl || null, addedAt: Date.now()
+    nameTr, nameLatin, family, desc, youtubeUrl,
+    photos: photosDataUrls.slice(), addedAt: Date.now()
   };
   try{
     await db.collection('plants').doc(key).set(data);
+    await saveAudioForKey(key, addAudioDataUrl);
     hideHint(true);
     closeAddModal();
     showToast('Kayıt eklendi 🌿');

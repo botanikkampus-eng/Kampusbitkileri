@@ -248,7 +248,7 @@
   }
   .leaf-marker.me{background:var(--rust);}
 
-  /* ---------- Marker cluster (botanik tema) ---------- */
+  /* ---------- Marker cluster ---------- */
   .herb-cluster{
     display:flex;align-items:center;justify-content:center;
     border-radius:50%;
@@ -263,7 +263,7 @@
   .herb-cluster.cluster-md{width:44px;height:44px;font-size:15px;background:var(--ochre);color:var(--green-dark);}
   .herb-cluster.cluster-lg{width:52px;height:52px;font-size:17px;background:var(--rust);}
 
-  /* ---------- Leaflet popup / herbarium card ---------- */
+  /* ---------- Popup ---------- */
   .leaflet-popup-content-wrapper{
     background:#FBF7EC;
     border-radius:2px;
@@ -759,12 +759,17 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-db.settings({ experimentalAutoDetectLongPolling: true });
+
+// Çevrimdışı önbellekleme ve bağlantı yönetimi
+db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+    console.warn("Persistence başlatılamadı:", err.code);
+});
+
 const auth = firebase.auth();
 let currentUser = null;
 
-const CAMPUS_CENTER = [38.3342, 38.4381]; // İnönü Üniversitesi Merkez Kampüsü, Battalgazi/Malatya (varsayılan - Firestore'daki paylaşılan ayar bunu ezebilir)
-let campusCenterOverride = null; // Firestore'dan yüklenince doldurulur, herkes için ortak
+const CAMPUS_CENTER = [38.3342, 38.4381];
+let campusCenterOverride = null;
 
 function getCampusCenter(){
   return campusCenterOverride || CAMPUS_CENTER;
@@ -942,9 +947,15 @@ function leafIcon(isMe){
   });
 }
 
-// ---------- Storage helpers (Firestore - herkes görür, sadece giriş yapan yazar) ----------
+// ---------- OTOMATİK SIFIRLANAN VE KOPMAYAN DİNLEYİCİ ----------
+let unsubscribePlants = null;
+
 function loadPlants(){
-  db.collection('plants').onSnapshot((snapshot)=>{
+  if (typeof unsubscribePlants === 'function') {
+    unsubscribePlants();
+  }
+
+  unsubscribePlants = db.collection('plants').onSnapshot((snapshot)=>{
     clusterGroup.clearLayers();
     markers = {};
     plants = {};
@@ -968,14 +979,12 @@ function loadPlants(){
       showToast(`${failedCount} kayıt bozuk veri içerdiği için atlandı`);
     }
   }, (err)=>{
-    console.error('Kayıtlar dinlenemedi', err);
-    const list = document.getElementById('specList');
-    if(list){
-      list.innerHTML = `<div class="empty-note">Bağlantı kurulamadı — internet/ağ bağlantını kontrol et.<br><button id="retryLoadBtn" class="icon-btn" style="margin-top:10px;background:var(--green);border-color:var(--green);color:#fff;">🔄 Tekrar dene</button></div>`;
-      const retryBtn = document.getElementById('retryLoadBtn');
-      if(retryBtn) retryBtn.addEventListener('click', ()=> loadPlants());
-    }
-    showToast('Kayıtlara bağlanılamadı, tekrar deniyor…');
+    console.error('Firebase sunucu bağlantısı kesildi, otomatik yenileniyor...', err);
+    
+    // Bağlantı tıkandığında 3 saniye içinde otomatik baştan bağlanır
+    setTimeout(() => {
+      loadPlants();
+    }, 3000);
   });
 }
 
@@ -1238,7 +1247,7 @@ function openEditForm(key){
   if(!d) return;
   stopSpeaking();
   editPhotosDataUrls = (d.photos && d.photos.length) ? d.photos.slice() : (d.photo ? [d.photo] : []);
-  editAudioDataUrl = d.audio || null; // eski kayıtlarla geriye dönük uyumluluk
+  editAudioDataUrl = d.audio || null; 
   const content = document.getElementById('detailContent');
   content.innerHTML = editFormHtml(d);
   renderEditPhotoGrid();
@@ -1662,10 +1671,10 @@ function resizeImageFile(file){
   });
 }
 
-// ---------- Ses dosyası yükleme (önceden kaydedilmiş) ----------
+// ---------- Ses dosyası yükleme ----------
 let addAudioDataUrl = null;
 let editAudioDataUrl = null;
-const MAX_AUDIO_BYTES = 950 * 1024; // ~950KB güvenlik payı (ses artık kendi ayrı kaydında, Firestore doküman limiti 1MB)
+const MAX_AUDIO_BYTES = 950 * 1024; 
 
 async function saveAudioForKey(key, dataUrl){
   try{
@@ -1680,7 +1689,7 @@ async function saveAudioForKey(key, dataUrl){
   }
 }
 
-// ---------- Fotoğrafları ayrı koleksiyonda tut (harita açılışını hızlandırmak için) ----------
+// ---------- Fotoğrafları ayrı koleksiyonda tut ----------
 const photoCache = {};
 
 async function savePhotosForKey(key, photosArr){
@@ -1759,7 +1768,7 @@ function removeAudio(target){
   renderAudioPreview(target);
 }
 
-function cancelActiveRecording(){} // kayıt modu kaldırıldı, uyumluluk için boş bırakıldı
+function cancelActiveRecording(){}
 
 document.getElementById('fAudio').addEventListener('change', (e)=>{
   const file = e.target.files && e.target.files[0];

@@ -753,11 +753,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// 🟢 KRİTİK DÜZELTME 1: WebChannel Long-Polling kilitlenmesini kesin olarak engelliyoruz
-db.settings({
-  experimentalForceLongPolling: false
-});
-
 const auth = firebase.auth();
 let currentUser = null;
 
@@ -940,48 +935,43 @@ function leafIcon(isMe){
   });
 }
 
-// 🟢 KRİTİK DÜZELTME 2: Oturum Tıkanmalarını Anında Kesip Yeniden Başlatan Canlı Dinleyici
-let unsubscribePlants = null;
-let loadTimeoutTimer = null;
-
+// 🎯 KESİN ÇÖZÜM: Canlı soket kanalını kapatıp verileri "Tekil İstek" (get) ile çekiyoruz.
+// Böylece arka planda tıkalı kanal/gsessionid veya NS_BINDING_ABORTED hatası oluşması İMKANSIZLAŞIYOR.
 function loadPlants(){
-  if (typeof unsubscribePlants === 'function') {
-    unsubscribePlants();
-  }
-
-  // 12 saniye içinde yanıt alınamazsa kilitlenen gsessionid hattını resetler
-  clearTimeout(loadTimeoutTimer);
-  loadTimeoutTimer = setTimeout(() => {
-    console.warn("Veri yükleme zaman aşımına uğradı, bağlantı sıfırlanıyor...");
-    db.disableNetwork().then(() => db.enableNetwork()).then(() => {
-      loadPlants();
-    });
-  }, 12000);
-
-  unsubscribePlants = db.collection('plants').onSnapshot((snapshot)=>{
-    clearTimeout(loadTimeoutTimer); // Veri geldiğinde zaman aşımı sayacını iptal et
+  db.collection('plants').get().then((snapshot) => {
     clusterGroup.clearLayers();
     markers = {};
     plants = {};
     let failedCount = 0;
-    snapshot.forEach(docSnap=>{
-      try{
+
+    snapshot.forEach(docSnap => {
+      try {
         const data = docSnap.data();
-        if(typeof data.lat !== 'number' || typeof data.lng !== 'number'){
+        if (typeof data.lat !== 'number' || typeof data.lng !== 'number') {
           throw new Error('Konum bilgisi eksik/bozuk');
         }
         plants[docSnap.id] = data;
         addMarker(docSnap.id, data);
-      }catch(e){
+      } catch(e) {
         failedCount++;
         console.error('Kayıt işlenirken hata (atlandı):', docSnap.id, e);
       }
     });
+
     renderSidebar();
     hideHint(Object.keys(plants).length > 0);
-  }, (err)=>{
-    clearTimeout(loadTimeoutTimer);
-    console.error('Firebase sunucu bağlantısı kesildi, ağ sıfırlanıyor...', err);
+    if(failedCount > 0){
+      showToast(`${failedCount} kayıt bozuk veri içerdiği için atlandı`);
+    }
+  }).catch((err) => {
+    console.error('Veri çekme hatası:', err);
+    const list = document.getElementById('specList');
+    if(list){
+      list.innerHTML = `<div class="empty-note">Bağlantı kurulamadı — tekrar deneniyor...<br><button id="retryLoadBtn" class="icon-btn" style="margin-top:10px;background:var(--green);border-color:var(--green);color:#fff;">🔄 Tekrar dene</button></div>`;
+      const retryBtn = document.getElementById('retryLoadBtn');
+      if(retryBtn) retryBtn.addEventListener('click', ()=> loadPlants());
+    }
+    // Olası tıkalı ağ hattı varsa sıfırlayıp 2 saniye sonra tekrar dener
     db.disableNetwork().then(() => db.enableNetwork()).then(() => {
       setTimeout(loadPlants, 2000);
     });
@@ -1319,6 +1309,7 @@ async function saveEditedPlant(key){
     await saveAudioForKey(key, editAudioDataUrl);
     await savePhotosForKey(key, editPhotosDataUrls);
     showToast('Kayıt güncellendi 🌿');
+    loadPlants(); // Güncelleme sonrası veriyi yeniden çeker
     openDetail(key);
   }catch(e){
     console.error(e);
@@ -1539,6 +1530,7 @@ async function deletePlant(key){
     await db.collection('photos').doc(key).delete().catch(()=>{});
     delete photoCache[key];
     showToast('Kayıt silindi');
+    loadPlants(); // Silme işleminden sonra haritayı tazelemek için
   }catch(e){
     console.error(e);
     showToast('Silinemedi, tekrar dene');
@@ -1814,6 +1806,7 @@ document.getElementById('addForm').addEventListener('submit', async (e)=>{
     hideHint(true);
     closeAddModal();
     showToast('Kayıt eklendi 🌿');
+    loadPlants(); // Yeni bitki eklendiğinde haritayı tazelemek için
   }catch(err){
     console.error(err);
     showToast('Kaydedilemedi, tekrar dene');

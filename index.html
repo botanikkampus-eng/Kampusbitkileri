@@ -759,6 +759,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+db.settings({ experimentalAutoDetectLongPolling: true });
 const auth = firebase.auth();
 try{
   auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
@@ -950,16 +951,34 @@ function loadPlants(){
     clusterGroup.clearLayers();
     markers = {};
     plants = {};
+    let failedCount = 0;
     snapshot.forEach(docSnap=>{
-      const data = docSnap.data();
-      plants[docSnap.id] = data;
-      addMarker(docSnap.id, data);
+      try{
+        const data = docSnap.data();
+        if(typeof data.lat !== 'number' || typeof data.lng !== 'number'){
+          throw new Error('Konum bilgisi eksik/bozuk');
+        }
+        plants[docSnap.id] = data;
+        addMarker(docSnap.id, data);
+      }catch(e){
+        failedCount++;
+        console.error('Kayıt işlenirken hata (atlandı):', docSnap.id, e);
+      }
     });
     renderSidebar();
     hideHint(Object.keys(plants).length > 0);
+    if(failedCount > 0){
+      showToast(`${failedCount} kayıt bozuk veri içerdiği için atlandı`);
+    }
   }, (err)=>{
     console.error('Kayıtlar dinlenemedi', err);
-    showToast('Kayıtlar yüklenirken bir sorun oluştu');
+    const list = document.getElementById('specList');
+    if(list){
+      list.innerHTML = `<div class="empty-note">Bağlantı kurulamadı — internet/ağ bağlantını kontrol et.<br><button id="retryLoadBtn" class="icon-btn" style="margin-top:10px;background:var(--green);border-color:var(--green);color:#fff;">🔄 Tekrar dene</button></div>`;
+      const retryBtn = document.getElementById('retryLoadBtn');
+      if(retryBtn) retryBtn.addEventListener('click', ()=> loadPlants());
+    }
+    showToast('Kayıtlara bağlanılamadı, tekrar deniyor…');
   });
 }
 

@@ -38,7 +38,7 @@
   }
   #app{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw;max-width:100%;overflow-x:hidden;}
 
-  /* ---------- Header ---------- */
+  /* Header */
   header{
     background:var(--green-dark);
     color:var(--cream);
@@ -97,7 +97,7 @@
   .icon-btn.primary{background:var(--ochre);border-color:var(--ochre);color:var(--green-dark);font-weight:600;}
   .icon-btn.primary:hover{background:#c69847;}
 
-  /* ---------- Layout ---------- */
+  /* Layout */
   .layout{flex:1;display:flex;min-height:0;position:relative;}
   #map{flex:1;height:100%;background:#dcd6c2;}
   .leaflet-container{font-family:'Work Sans',sans-serif;}
@@ -160,7 +160,6 @@
     line-height:1.5;
   }
 
-  /* mobile drawer */
   .sidebar-toggle{display:none;}
   @media (max-width:760px){
     aside.sidebar{
@@ -237,7 +236,6 @@
     text-align:center;
   }
 
-  /* ---------- Custom marker ---------- */
   .leaf-marker{
     width:26px;height:26px;
     background:var(--green);
@@ -248,7 +246,6 @@
   }
   .leaf-marker.me{background:var(--rust);}
 
-  /* ---------- Marker cluster ---------- */
   .herb-cluster{
     display:flex;align-items:center;justify-content:center;
     border-radius:50%;
@@ -263,7 +260,6 @@
   .herb-cluster.cluster-md{width:44px;height:44px;font-size:15px;background:var(--ochre);color:var(--green-dark);}
   .herb-cluster.cluster-lg{width:52px;height:52px;font-size:17px;background:var(--rust);}
 
-  /* ---------- Popup ---------- */
   .leaflet-popup-content-wrapper{
     background:#FBF7EC;
     border-radius:2px;
@@ -321,7 +317,6 @@
     text-decoration:underline;padding:0;
   }
 
-  /* ---------- Modal ---------- */
   .overlay{
     position:fixed;inset:0;
     background:rgba(34,48,28,0.55);
@@ -415,7 +410,6 @@
   .btn.save:disabled{opacity:.6;cursor:default;}
   .btn.cancel{background:transparent;}
 
-  /* ---------- Fullscreen photo slider ---------- */
   .slider-overlay{
     position:fixed;inset:0;
     background:rgba(10,14,8,0.94);
@@ -454,7 +448,6 @@
     padding:4px 12px;border-radius:20px;
   }
 
-  /* ---------- Karekod (QR) modal ---------- */
   .qr-modal{ max-width:340px; text-align:center; padding:22px 22px 20px; }
   .qr-canvas-wrap{
     display:flex;align-items:center;justify-content:center;
@@ -476,7 +469,6 @@
   }
   .toast.show{opacity:1;}
 
-  /* ---------- Detail page ---------- */
   .detail-modal{
     max-width:520px;
     position:relative;
@@ -757,12 +749,13 @@ const firebaseConfig = {
   messagingSenderId: "371973179231",
   appId: "1:371973179231:web:1f74f51642c17b2839d8ea"
 };
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// Çevrimdışı önbellekleme ve bağlantı yönetimi
-db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
-    console.warn("Persistence başlatılamadı:", err.code);
+// 🟢 KRİTİK DÜZELTME 1: WebChannel Long-Polling kilitlenmesini kesin olarak engelliyoruz
+db.settings({
+  experimentalForceLongPolling: false
 });
 
 const auth = firebase.auth();
@@ -846,7 +839,7 @@ function initMap(){
   checkDeepLinkOnLoad();
 }
 
-// ---------- Yer / adres arama (Nominatim - OpenStreetMap) ----------
+// Location Search
 let locSearchTimer = null;
 let locSearchController = null;
 let tempSearchMarker = null;
@@ -947,15 +940,26 @@ function leafIcon(isMe){
   });
 }
 
-// ---------- OTOMATİK SIFIRLANAN VE KOPMAYAN DİNLEYİCİ ----------
+// 🟢 KRİTİK DÜZELTME 2: Oturum Tıkanmalarını Anında Kesip Yeniden Başlatan Canlı Dinleyici
 let unsubscribePlants = null;
+let loadTimeoutTimer = null;
 
 function loadPlants(){
   if (typeof unsubscribePlants === 'function') {
     unsubscribePlants();
   }
 
+  // 12 saniye içinde yanıt alınamazsa kilitlenen gsessionid hattını resetler
+  clearTimeout(loadTimeoutTimer);
+  loadTimeoutTimer = setTimeout(() => {
+    console.warn("Veri yükleme zaman aşımına uğradı, bağlantı sıfırlanıyor...");
+    db.disableNetwork().then(() => db.enableNetwork()).then(() => {
+      loadPlants();
+    });
+  }, 12000);
+
   unsubscribePlants = db.collection('plants').onSnapshot((snapshot)=>{
+    clearTimeout(loadTimeoutTimer); // Veri geldiğinde zaman aşımı sayacını iptal et
     clusterGroup.clearLayers();
     markers = {};
     plants = {};
@@ -975,16 +979,12 @@ function loadPlants(){
     });
     renderSidebar();
     hideHint(Object.keys(plants).length > 0);
-    if(failedCount > 0){
-      showToast(`${failedCount} kayıt bozuk veri içerdiği için atlandı`);
-    }
   }, (err)=>{
-    console.error('Firebase sunucu bağlantısı kesildi, otomatik yenileniyor...', err);
-    
-    // Bağlantı tıkandığında 3 saniye içinde otomatik baştan bağlanır
-    setTimeout(() => {
-      loadPlants();
-    }, 3000);
+    clearTimeout(loadTimeoutTimer);
+    console.error('Firebase sunucu bağlantısı kesildi, ağ sıfırlanıyor...', err);
+    db.disableNetwork().then(() => db.enableNetwork()).then(() => {
+      setTimeout(loadPlants, 2000);
+    });
   });
 }
 
@@ -1157,7 +1157,6 @@ function closeDetail(){
   content.querySelectorAll('iframe').forEach(f=> f.remove());
 }
 
-// ---------- Kayıt düzenleme ----------
 let editPhotosDataUrls = [];
 
 function editFormHtml(d){
@@ -1327,7 +1326,7 @@ async function saveEditedPlant(key){
   }
 }
 
-// ---------- Sesli okuma (Text-to-Speech) ----------
+// Text to Speech
 let currentUtterance = null;
 let cachedVoices = [];
 
@@ -1392,7 +1391,7 @@ function toggleSpeak(d){
   window.speechSynthesis.speak(utter);
 }
 
-// ---------- Karekod (QR) ----------
+// QR Code
 let currentQrDownloadName = 'bitki';
 
 function plantDeepLink(key){
@@ -1453,7 +1452,7 @@ function checkDeepLinkOnLoad(){
   });
 }
 
-// ---------- Tam ekran fotoğraf slider ----------
+// Fullscreen photo slider
 let sliderPhotos = [];
 let sliderIndex = 0;
 
@@ -1505,7 +1504,6 @@ document.getElementById('photoSliderOverlay').addEventListener('touchend', (e)=>
   sliderTouchStartX = null;
 });
 
-
 document.getElementById('detailOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'detailOverlay') closeDetail();
 });
@@ -1547,7 +1545,7 @@ async function deletePlant(key){
   }
 }
 
-// ---------- Sidebar ----------
+// Sidebar
 function renderSidebar(){
   const list = document.getElementById('specList');
   const q = document.getElementById('search').value.trim().toLowerCase();
@@ -1584,7 +1582,7 @@ function renderSidebar(){
 }
 document.getElementById('search').addEventListener('input', renderSidebar);
 
-// ---------- Add modal ----------
+// Add modal
 const addOverlay = document.getElementById('addOverlay');
 function openAddModal(){
   document.getElementById('coordLabel').textContent = pendingLatLng
@@ -1671,7 +1669,7 @@ function resizeImageFile(file){
   });
 }
 
-// ---------- Ses dosyası yükleme ----------
+// Audio File
 let addAudioDataUrl = null;
 let editAudioDataUrl = null;
 const MAX_AUDIO_BYTES = 950 * 1024; 
@@ -1689,7 +1687,7 @@ async function saveAudioForKey(key, dataUrl){
   }
 }
 
-// ---------- Fotoğrafları ayrı koleksiyonda tut ----------
+// Photos Cache
 const photoCache = {};
 
 async function savePhotosForKey(key, photosArr){
@@ -1776,7 +1774,6 @@ document.getElementById('fAudio').addEventListener('change', (e)=>{
 });
 document.getElementById('removeAudioBtn').addEventListener('click', ()=> removeAudio('add'));
 
-
 document.getElementById('fPhoto').addEventListener('change', async (e)=>{
   const files = Array.from(e.target.files || []);
   if(files.length === 0) return;
@@ -1830,13 +1827,13 @@ function hideHint(force){
   if(Object.keys(plants).length > 0 || force) banner.style.display = 'none';
 }
 
-// ---------- Locate ----------
+// Locate
 document.getElementById('goCampusBtn').addEventListener('click', ()=>{
   map.flyTo(getCampusCenter(), 17, {animate:true});
   showToast('Eczacılık Fakültesi kampüsüne dönüldü');
 });
 
-// ---------- Giriş / Çıkış (Firebase Auth) ----------
+// Firebase Auth
 const loginOverlay = document.getElementById('loginOverlay');
 const authBtn = document.getElementById('authBtn');
 
@@ -1917,12 +1914,12 @@ document.getElementById('locateBtn').addEventListener('click', ()=>{
   });
 });
 
-// ---------- Sidebar toggle (mobile) ----------
+// Sidebar toggle
 document.getElementById('toggleSidebar').addEventListener('click', ()=>{
   document.getElementById('sidebar').classList.toggle('open');
 });
 
-// ---------- Toast ----------
+// Toast
 let toastTimer;
 function showToast(msg){
   const t = document.getElementById('toast');

@@ -14,6 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js" defer></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js" defer></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 <style>
   :root{
     --cream:#EDE6D3;
@@ -453,6 +454,18 @@
     padding:4px 12px;border-radius:20px;
   }
 
+  /* ---------- Karekod (QR) modal ---------- */
+  .qr-modal{ max-width:340px; text-align:center; padding:22px 22px 20px; }
+  .qr-canvas-wrap{
+    display:flex;align-items:center;justify-content:center;
+    background:#fff;border:1px solid var(--line);border-radius:4px;
+    padding:14px;margin:12px auto 10px;width:fit-content;
+  }
+  .qr-plant-name{
+    font-family:'Cormorant Garamond',serif;font-style:italic;
+    font-size:16px;color:var(--green);margin:0 0 6px;
+  }
+
   .toast{
     position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
     background:var(--ink);color:var(--cream);
@@ -569,6 +582,10 @@
   }
   .detail-body .speak-link.speaking{
     background:var(--ink-soft);color:var(--cream);
+  }
+  .detail-body .qr-link{
+    background:none;border:1px solid var(--green-dark);color:var(--green-dark);
+    border-radius:3px;cursor:pointer;padding:7px 12px;font-size:12.5px;
   }
   .detail-body .del-link{
     font-size:12.5px;color:var(--rust);
@@ -713,6 +730,21 @@
   <div class="slider-counter" id="sliderCounter"></div>
 </div>
 
+<!-- Karekod (QR) overlay -->
+<div class="overlay hidden" id="qrOverlay">
+  <div class="modal qr-modal">
+    <div class="close-x" id="closeQrBtn">✕</div>
+    <h2>Karekod</h2>
+    <div class="sub">Bu karekodu bitkinin üzerine yapıştırınca okutan kişi direkt bu kayda ulaşır</div>
+    <div id="qrCanvasContainer" class="qr-canvas-wrap"></div>
+    <p id="qrPlantName" class="qr-plant-name"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn cancel" id="qrCloseBtn2">Kapat</button>
+      <button type="button" class="btn save" id="qrDownloadBtn">⬇️ PNG indir</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -808,6 +840,7 @@ function initMap(){
 
   loadPlants();
   initLocationSearch();
+  checkDeepLinkOnLoad();
 }
 
 // ---------- Yer / adres arama (Nominatim - OpenStreetMap) ----------
@@ -935,16 +968,27 @@ function addMarker(key, data){
   m.bindTooltip(data.nameTr || data.nameLatin || 'İsimlendirilmemiş kayıt', {direction:'top', offset:[0,-22]});
   m.bindPopup(popupHtml(key, data));
   m.on('popupopen', ()=>{
-    const btn = document.querySelector(`.detail-link[data-key="${CSS.escape(key)}"]`);
-    if(btn) btn.addEventListener('click', ()=>{ m.closePopup(); openDetail(key); });
+    const bindDetailBtn = ()=>{
+      const btn = document.querySelector(`.detail-link[data-key="${CSS.escape(key)}"]`);
+      if(btn) btn.addEventListener('click', ()=>{ m.closePopup(); openDetail(key); });
+    };
+    bindDetailBtn();
+    if(!(data.photos && data.photos.length)){
+      fetchPhotosForKey(key).then(photos=>{
+        if(photos.length){
+          m.setPopupContent(popupHtml(key, data, photos));
+          bindDetailBtn();
+        }
+      });
+    }
   });
   clusterGroup.addLayer(m);
   markers[key] = m;
 }
 
-function popupHtml(key, d){
+function popupHtml(key, d, photosOverride){
   const accNo = 'İÜ.ECZ.' + key.replace('plant:','').slice(0,6);
-  const photos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
+  const photos = photosOverride !== undefined ? photosOverride : (d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []));
   const nameTrDisplay = d.nameTr ? escapeHtml(d.nameTr) : 'İsimlendirilmemiş kayıt';
   return `
     <div class="herb-card${photos.length ? ' has-photo' : ''}">
@@ -963,18 +1007,28 @@ function popupHtml(key, d){
 
 window.currentDetailPhotos = [];
 
+function heroInnerHtml(photos){
+  const heroPhoto = photos.length ? photos[0] : null;
+  return heroPhoto
+    ? `<img src="${heroPhoto}" onclick="openPhotoSlider(currentDetailPhotos, 0)">`
+    : `<div class="no-photo-mark">🌿</div>`;
+}
+
+function galleryInnerHtml(photos){
+  return photos.length > 1
+    ? `<div class="detail-gallery">${photos.map((p,i)=>`<img src="${p}" onclick="openPhotoSlider(currentDetailPhotos, ${i})">`).join('')}</div>`
+    : '';
+}
+
 function detailHtml(key, d){
   const accNo = 'İÜ.ECZ.' + key.replace('plant:','').slice(0,6);
   const photos = d.photos && d.photos.length ? d.photos : (d.photo ? [d.photo] : []);
   const nameTrDisplay = d.nameTr ? escapeHtml(d.nameTr) : 'İsimlendirilmemiş kayıt';
-  const heroPhoto = photos.length ? photos[0] : null;
   const ytId = getYoutubeVideoId(d.youtubeUrl);
 
   return `
     <div class="detail-hero">
-      ${heroPhoto
-        ? `<img src="${heroPhoto}" onclick="openPhotoSlider(currentDetailPhotos, 0)">`
-        : `<div class="no-photo-mark">🌿</div>`}
+      <div id="detailHeroInner" style="height:100%;">${heroInnerHtml(photos)}</div>
       <div class="close-x" id="closeDetailBtn">✕</div>
       <span class="acc-badge">No. ${accNo}</span>
     </div>
@@ -983,10 +1037,7 @@ function detailHtml(key, d){
       ${d.nameLatin ? `<p class="name-latin">${escapeHtml(d.nameLatin)}</p>` : ''}
       ${d.family ? `<span class="classification-chip">🔬 Familya: ${escapeHtml(d.family)}</span>` : ''}
 
-      ${photos.length > 1 ? `
-        <div class="detail-gallery">
-          ${photos.map((p,i)=>`<img src="${p}" onclick="openPhotoSlider(currentDetailPhotos, ${i})">`).join('')}
-        </div>` : ''}
+      <div id="detailGallerySlot">${galleryInnerHtml(photos)}</div>
 
       <div class="info-cards">
         ${ytId ? `
@@ -1019,6 +1070,7 @@ function detailHtml(key, d){
       <div class="card-actions">
         <button class="speak-link" id="speakBtn">🔊 Sesli Oku</button>
         <button class="web-search-link">🔍 İnternette ara</button>
+        <button class="qr-link" data-key="${key}">🏷️ Karekod</button>
         ${currentUser ? `<button class="edit-link" data-key="${key}">✏️ Düzenle</button>` : ''}
         ${currentUser ? `<button class="del-link" data-key="${key}">kaydı sil</button>` : ''}
       </div>
@@ -1043,7 +1095,21 @@ function openDetail(key){
   if(editBtn) editBtn.addEventListener('click', ()=> openEditForm(key));
   const speakBtn = content.querySelector('.speak-link');
   if(speakBtn) speakBtn.addEventListener('click', ()=> toggleSpeak(d));
+  const qrBtn = content.querySelector('.qr-link');
+  if(qrBtn) qrBtn.addEventListener('click', ()=> openQrModal(key, d));
   document.getElementById('detailOverlay').classList.remove('hidden');
+
+  if(!(d.photos && d.photos.length)){
+    fetchPhotosForKey(key).then(photos=>{
+      if(photos.length){
+        window.currentDetailPhotos = photos;
+        const heroSlot = document.getElementById('detailHeroInner');
+        const gallerySlot = document.getElementById('detailGallerySlot');
+        if(heroSlot) heroSlot.innerHTML = heroInnerHtml(photos);
+        if(gallerySlot) gallerySlot.innerHTML = galleryInnerHtml(photos);
+      }
+    });
+  }
 
   db.collection('audios').doc(key).get().then((docSnap)=>{
     const slot = document.getElementById('detailAudioSlot');
@@ -1170,6 +1236,16 @@ function openEditForm(key){
     }
   }).catch(()=>{});
 
+  if(!(d.photos && d.photos.length)){
+    fetchPhotosForKey(key).then(photos=>{
+      if(photos.length){
+        editPhotosDataUrls = photos.slice();
+        renderEditPhotoGrid();
+        updateEditPhotoDropText();
+      }
+    });
+  }
+
   document.getElementById('editPhotoInput').addEventListener('change', async (e)=>{
     const files = Array.from(e.target.files || []);
     if(files.length === 0) return;
@@ -1208,15 +1284,16 @@ async function saveEditedPlant(key){
   const youtubeUrl = document.getElementById('eYoutube').value.trim();
 
   const updated = Object.assign({}, d, {
-    nameTr, nameLatin, family, desc, youtubeUrl,
-    photos: editPhotosDataUrls.slice()
+    nameTr, nameLatin, family, desc, youtubeUrl
   });
   delete updated.photo;
+  delete updated.photos;
   delete updated.audio;
 
   try{
     await db.collection('plants').doc(key).set(updated);
     await saveAudioForKey(key, editAudioDataUrl);
+    await savePhotosForKey(key, editPhotosDataUrls);
     showToast('Kayıt güncellendi 🌿');
     openDetail(key);
   }catch(e){
@@ -1288,6 +1365,67 @@ function toggleSpeak(d){
   currentUtterance = utter;
   if(btn){ btn.textContent = '⏹ Durdur'; btn.classList.add('speaking'); }
   window.speechSynthesis.speak(utter);
+}
+
+// ---------- Karekod (QR) ----------
+let currentQrDownloadName = 'bitki';
+
+function plantDeepLink(key){
+  return `${location.origin}${location.pathname}?p=${encodeURIComponent(key)}`;
+}
+
+function openQrModal(key, d){
+  const url = plantDeepLink(key);
+  const container = document.getElementById('qrCanvasContainer');
+  container.innerHTML = '';
+  try{
+    new QRCode(container, { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+  }catch(e){
+    console.error('Karekod oluşturulamadı', e);
+    showToast('Karekod oluşturulamadı');
+    return;
+  }
+  const label = d.nameTr || d.nameLatin || 'İsimlendirilmemiş kayıt';
+  document.getElementById('qrPlantName').textContent = label;
+  currentQrDownloadName = label.replace(/[^a-zA-ZçÇğĞıİöÖşŞüÜ0-9]+/g,'-').toLowerCase() || 'bitki';
+  document.getElementById('qrOverlay').classList.remove('hidden');
+}
+
+function closeQrModal(){
+  document.getElementById('qrOverlay').classList.add('hidden');
+}
+
+document.getElementById('closeQrBtn').addEventListener('click', closeQrModal);
+document.getElementById('qrCloseBtn2').addEventListener('click', closeQrModal);
+document.getElementById('qrOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'qrOverlay') closeQrModal();
+});
+document.getElementById('qrDownloadBtn').addEventListener('click', ()=>{
+  const canvas = document.querySelector('#qrCanvasContainer canvas');
+  if(!canvas){ showToast('Karekod bulunamadı, tekrar dene'); return; }
+  const link = document.createElement('a');
+  link.download = `${currentQrDownloadName}-karekod.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+function checkDeepLinkOnLoad(){
+  const params = new URLSearchParams(window.location.search);
+  const key = params.get('p');
+  if(!key) return;
+  db.collection('plants').doc(key).get().then((docSnap)=>{
+    if(docSnap.exists){
+      const data = docSnap.data();
+      plants[key] = data;
+      map.setView([data.lat, data.lng], 18);
+      openDetail(key);
+    }else{
+      showToast('Bu karekoda ait kayıt bulunamadı — silinmiş olabilir');
+    }
+  }).catch((err)=>{
+    console.error(err);
+    showToast('Kayıt yüklenirken bir sorun oluştu');
+  });
 }
 
 // ---------- Tam ekran fotoğraf slider ----------
@@ -1375,6 +1513,8 @@ async function deletePlant(key){
   try{
     await db.collection('plants').doc(key).delete();
     await db.collection('audios').doc(key).delete().catch(()=>{});
+    await db.collection('photos').doc(key).delete().catch(()=>{});
+    delete photoCache[key];
     showToast('Kayıt silindi');
   }catch(e){
     console.error(e);
@@ -1524,6 +1664,37 @@ async function saveAudioForKey(key, dataUrl){
   }
 }
 
+// ---------- Fotoğrafları ayrı koleksiyonda tut (harita açılışını hızlandırmak için) ----------
+const photoCache = {};
+
+async function savePhotosForKey(key, photosArr){
+  try{
+    if(photosArr && photosArr.length){
+      await db.collection('photos').doc(key).set({photos: photosArr});
+      photoCache[key] = photosArr.slice();
+    }else{
+      await db.collection('photos').doc(key).delete().catch(()=>{});
+      photoCache[key] = [];
+    }
+  }catch(e){
+    console.error('Fotoğraflar kaydedilemedi', e);
+    showToast('Fotoğraflar kaydedilemedi ama bitki kaydı başarıyla kaydedildi');
+  }
+}
+
+async function fetchPhotosForKey(key){
+  if(photoCache[key]) return photoCache[key];
+  try{
+    const docSnap = await db.collection('photos').doc(key).get();
+    const list = (docSnap.exists && docSnap.data().photos) ? docSnap.data().photos : [];
+    photoCache[key] = list;
+    return list;
+  }catch(e){
+    console.error('Fotoğraflar alınamadı', e);
+    return [];
+  }
+}
+
 function getAudioEls(target){
   const prefix = target === 'edit' ? 'edit' : '';
   return {
@@ -1612,12 +1783,12 @@ document.getElementById('addForm').addEventListener('submit', async (e)=>{
   const key = 'plant:' + Date.now() + Math.random().toString(36).slice(2,8);
   const data = {
     lat: pendingLatLng.lat, lng: pendingLatLng.lng,
-    nameTr, nameLatin, family, desc, youtubeUrl,
-    photos: photosDataUrls.slice(), addedAt: Date.now()
+    nameTr, nameLatin, family, desc, youtubeUrl, addedAt: Date.now()
   };
   try{
     await db.collection('plants').doc(key).set(data);
     await saveAudioForKey(key, addAudioDataUrl);
+    await savePhotosForKey(key, photosDataUrls);
     hideHint(true);
     closeAddModal();
     showToast('Kayıt eklendi 🌿');

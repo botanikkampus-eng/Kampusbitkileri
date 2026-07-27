@@ -761,9 +761,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 db.settings({ experimentalAutoDetectLongPolling: true });
 const auth = firebase.auth();
-try{
-  auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
-}catch(e){}
 let currentUser = null;
 
 const CAMPUS_CENTER = [38.3342, 38.4381]; // İnönü Üniversitesi Merkez Kampüsü, Battalgazi/Malatya (varsayılan - Firestore'daki paylaşılan ayar bunu ezebilir)

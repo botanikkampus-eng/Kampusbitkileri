@@ -38,7 +38,7 @@
   }
   #app{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw;max-width:100%;overflow-x:hidden;}
 
-  /* Header */
+  /* ---------- Header ---------- */
   header{
     background:var(--green-dark);
     color:var(--cream);
@@ -97,7 +97,7 @@
   .icon-btn.primary{background:var(--ochre);border-color:var(--ochre);color:var(--green-dark);font-weight:600;}
   .icon-btn.primary:hover{background:#c69847;}
 
-  /* Layout */
+  /* ---------- Layout ---------- */
   .layout{flex:1;display:flex;min-height:0;position:relative;}
   #map{flex:1;height:100%;background:#dcd6c2;}
   .leaflet-container{font-family:'Work Sans',sans-serif;}
@@ -160,6 +160,7 @@
     line-height:1.5;
   }
 
+  /* mobile drawer */
   .sidebar-toggle{display:none;}
   @media (max-width:760px){
     aside.sidebar{
@@ -236,6 +237,7 @@
     text-align:center;
   }
 
+  /* ---------- Custom marker ---------- */
   .leaf-marker{
     width:26px;height:26px;
     background:var(--green);
@@ -246,6 +248,7 @@
   }
   .leaf-marker.me{background:var(--rust);}
 
+  /* ---------- Marker cluster (botanik tema) ---------- */
   .herb-cluster{
     display:flex;align-items:center;justify-content:center;
     border-radius:50%;
@@ -260,6 +263,7 @@
   .herb-cluster.cluster-md{width:44px;height:44px;font-size:15px;background:var(--ochre);color:var(--green-dark);}
   .herb-cluster.cluster-lg{width:52px;height:52px;font-size:17px;background:var(--rust);}
 
+  /* ---------- Leaflet popup / herbarium card ---------- */
   .leaflet-popup-content-wrapper{
     background:#FBF7EC;
     border-radius:2px;
@@ -317,6 +321,7 @@
     text-decoration:underline;padding:0;
   }
 
+  /* ---------- Modal ---------- */
   .overlay{
     position:fixed;inset:0;
     background:rgba(34,48,28,0.55);
@@ -410,6 +415,7 @@
   .btn.save:disabled{opacity:.6;cursor:default;}
   .btn.cancel{background:transparent;}
 
+  /* ---------- Fullscreen photo slider ---------- */
   .slider-overlay{
     position:fixed;inset:0;
     background:rgba(10,14,8,0.94);
@@ -448,6 +454,7 @@
     padding:4px 12px;border-radius:20px;
   }
 
+  /* ---------- Karekod (QR) modal ---------- */
   .qr-modal{ max-width:340px; text-align:center; padding:22px 22px 20px; }
   .qr-canvas-wrap{
     display:flex;align-items:center;justify-content:center;
@@ -469,6 +476,7 @@
   }
   .toast.show{opacity:1;}
 
+  /* ---------- Detail page ---------- */
   .detail-modal{
     max-width:520px;
     position:relative;
@@ -749,15 +757,14 @@ const firebaseConfig = {
   messagingSenderId: "371973179231",
   appId: "1:371973179231:web:1f74f51642c17b2839d8ea"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-
+db.settings({ experimentalAutoDetectLongPolling: true });
 const auth = firebase.auth();
 let currentUser = null;
 
-const CAMPUS_CENTER = [38.3342, 38.4381];
-let campusCenterOverride = null;
+const CAMPUS_CENTER = [38.3342, 38.4381]; // İnönü Üniversitesi Merkez Kampüsü, Battalgazi/Malatya (varsayılan - Firestore'daki paylaşılan ayar bunu ezebilir)
+let campusCenterOverride = null; // Firestore'dan yüklenince doldurulur, herkes için ortak
 
 function getCampusCenter(){
   return campusCenterOverride || CAMPUS_CENTER;
@@ -834,7 +841,7 @@ function initMap(){
   checkDeepLinkOnLoad();
 }
 
-// Location Search
+// ---------- Yer / adres arama (Nominatim - OpenStreetMap) ----------
 let locSearchTimer = null;
 let locSearchController = null;
 let tempSearchMarker = null;
@@ -935,46 +942,40 @@ function leafIcon(isMe){
   });
 }
 
-// 🎯 KESİN ÇÖZÜM: Canlı soket kanalını kapatıp verileri "Tekil İstek" (get) ile çekiyoruz.
-// Böylece arka planda tıkalı kanal/gsessionid veya NS_BINDING_ABORTED hatası oluşması İMKANSIZLAŞIYOR.
+// ---------- Storage helpers (Firestore - herkes görür, sadece giriş yapan yazar) ----------
 function loadPlants(){
-  db.collection('plants').get().then((snapshot) => {
+  db.collection('plants').onSnapshot((snapshot)=>{
     clusterGroup.clearLayers();
     markers = {};
     plants = {};
     let failedCount = 0;
-
-    snapshot.forEach(docSnap => {
-      try {
+    snapshot.forEach(docSnap=>{
+      try{
         const data = docSnap.data();
-        if (typeof data.lat !== 'number' || typeof data.lng !== 'number') {
+        if(typeof data.lat !== 'number' || typeof data.lng !== 'number'){
           throw new Error('Konum bilgisi eksik/bozuk');
         }
         plants[docSnap.id] = data;
         addMarker(docSnap.id, data);
-      } catch(e) {
+      }catch(e){
         failedCount++;
         console.error('Kayıt işlenirken hata (atlandı):', docSnap.id, e);
       }
     });
-
     renderSidebar();
     hideHint(Object.keys(plants).length > 0);
     if(failedCount > 0){
       showToast(`${failedCount} kayıt bozuk veri içerdiği için atlandı`);
     }
-  }).catch((err) => {
-    console.error('Veri çekme hatası:', err);
+  }, (err)=>{
+    console.error('Kayıtlar dinlenemedi', err);
     const list = document.getElementById('specList');
     if(list){
-      list.innerHTML = `<div class="empty-note">Bağlantı kurulamadı — tekrar deneniyor...<br><button id="retryLoadBtn" class="icon-btn" style="margin-top:10px;background:var(--green);border-color:var(--green);color:#fff;">🔄 Tekrar dene</button></div>`;
+      list.innerHTML = `<div class="empty-note">Bağlantı kurulamadı — internet/ağ bağlantını kontrol et.<br><button id="retryLoadBtn" class="icon-btn" style="margin-top:10px;background:var(--green);border-color:var(--green);color:#fff;">🔄 Tekrar dene</button></div>`;
       const retryBtn = document.getElementById('retryLoadBtn');
       if(retryBtn) retryBtn.addEventListener('click', ()=> loadPlants());
     }
-    // Olası tıkalı ağ hattı varsa sıfırlayıp 2 saniye sonra tekrar dener
-    db.disableNetwork().then(() => db.enableNetwork()).then(() => {
-      setTimeout(loadPlants, 2000);
-    });
+    showToast('Kayıtlara bağlanılamadı, tekrar deniyor…');
   });
 }
 
@@ -1147,6 +1148,7 @@ function closeDetail(){
   content.querySelectorAll('iframe').forEach(f=> f.remove());
 }
 
+// ---------- Kayıt düzenleme ----------
 let editPhotosDataUrls = [];
 
 function editFormHtml(d){
@@ -1236,7 +1238,7 @@ function openEditForm(key){
   if(!d) return;
   stopSpeaking();
   editPhotosDataUrls = (d.photos && d.photos.length) ? d.photos.slice() : (d.photo ? [d.photo] : []);
-  editAudioDataUrl = d.audio || null; 
+  editAudioDataUrl = d.audio || null; // eski kayıtlarla geriye dönük uyumluluk
   const content = document.getElementById('detailContent');
   content.innerHTML = editFormHtml(d);
   renderEditPhotoGrid();
@@ -1309,7 +1311,6 @@ async function saveEditedPlant(key){
     await saveAudioForKey(key, editAudioDataUrl);
     await savePhotosForKey(key, editPhotosDataUrls);
     showToast('Kayıt güncellendi 🌿');
-    loadPlants(); // Güncelleme sonrası veriyi yeniden çeker
     openDetail(key);
   }catch(e){
     console.error(e);
@@ -1317,7 +1318,7 @@ async function saveEditedPlant(key){
   }
 }
 
-// Text to Speech
+// ---------- Sesli okuma (Text-to-Speech) ----------
 let currentUtterance = null;
 let cachedVoices = [];
 
@@ -1382,7 +1383,7 @@ function toggleSpeak(d){
   window.speechSynthesis.speak(utter);
 }
 
-// QR Code
+// ---------- Karekod (QR) ----------
 let currentQrDownloadName = 'bitki';
 
 function plantDeepLink(key){
@@ -1443,7 +1444,7 @@ function checkDeepLinkOnLoad(){
   });
 }
 
-// Fullscreen photo slider
+// ---------- Tam ekran fotoğraf slider ----------
 let sliderPhotos = [];
 let sliderIndex = 0;
 
@@ -1495,6 +1496,7 @@ document.getElementById('photoSliderOverlay').addEventListener('touchend', (e)=>
   sliderTouchStartX = null;
 });
 
+
 document.getElementById('detailOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'detailOverlay') closeDetail();
 });
@@ -1530,14 +1532,13 @@ async function deletePlant(key){
     await db.collection('photos').doc(key).delete().catch(()=>{});
     delete photoCache[key];
     showToast('Kayıt silindi');
-    loadPlants(); // Silme işleminden sonra haritayı tazelemek için
   }catch(e){
     console.error(e);
     showToast('Silinemedi, tekrar dene');
   }
 }
 
-// Sidebar
+// ---------- Sidebar ----------
 function renderSidebar(){
   const list = document.getElementById('specList');
   const q = document.getElementById('search').value.trim().toLowerCase();
@@ -1574,7 +1575,7 @@ function renderSidebar(){
 }
 document.getElementById('search').addEventListener('input', renderSidebar);
 
-// Add modal
+// ---------- Add modal ----------
 const addOverlay = document.getElementById('addOverlay');
 function openAddModal(){
   document.getElementById('coordLabel').textContent = pendingLatLng
@@ -1661,10 +1662,10 @@ function resizeImageFile(file){
   });
 }
 
-// Audio File
+// ---------- Ses dosyası yükleme (önceden kaydedilmiş) ----------
 let addAudioDataUrl = null;
 let editAudioDataUrl = null;
-const MAX_AUDIO_BYTES = 950 * 1024; 
+const MAX_AUDIO_BYTES = 950 * 1024; // ~950KB güvenlik payı (ses artık kendi ayrı kaydında, Firestore doküman limiti 1MB)
 
 async function saveAudioForKey(key, dataUrl){
   try{
@@ -1679,7 +1680,7 @@ async function saveAudioForKey(key, dataUrl){
   }
 }
 
-// Photos Cache
+// ---------- Fotoğrafları ayrı koleksiyonda tut (harita açılışını hızlandırmak için) ----------
 const photoCache = {};
 
 async function savePhotosForKey(key, photosArr){
@@ -1758,13 +1759,14 @@ function removeAudio(target){
   renderAudioPreview(target);
 }
 
-function cancelActiveRecording(){}
+function cancelActiveRecording(){} // kayıt modu kaldırıldı, uyumluluk için boş bırakıldı
 
 document.getElementById('fAudio').addEventListener('change', (e)=>{
   const file = e.target.files && e.target.files[0];
   if(file) handleAudioFile(file, 'add');
 });
 document.getElementById('removeAudioBtn').addEventListener('click', ()=> removeAudio('add'));
+
 
 document.getElementById('fPhoto').addEventListener('change', async (e)=>{
   const files = Array.from(e.target.files || []);
@@ -1806,7 +1808,6 @@ document.getElementById('addForm').addEventListener('submit', async (e)=>{
     hideHint(true);
     closeAddModal();
     showToast('Kayıt eklendi 🌿');
-    loadPlants(); // Yeni bitki eklendiğinde haritayı tazelemek için
   }catch(err){
     console.error(err);
     showToast('Kaydedilemedi, tekrar dene');
@@ -1820,13 +1821,13 @@ function hideHint(force){
   if(Object.keys(plants).length > 0 || force) banner.style.display = 'none';
 }
 
-// Locate
+// ---------- Locate ----------
 document.getElementById('goCampusBtn').addEventListener('click', ()=>{
   map.flyTo(getCampusCenter(), 17, {animate:true});
   showToast('Eczacılık Fakültesi kampüsüne dönüldü');
 });
 
-// Firebase Auth
+// ---------- Giriş / Çıkış (Firebase Auth) ----------
 const loginOverlay = document.getElementById('loginOverlay');
 const authBtn = document.getElementById('authBtn');
 
@@ -1907,12 +1908,12 @@ document.getElementById('locateBtn').addEventListener('click', ()=>{
   });
 });
 
-// Sidebar toggle
+// ---------- Sidebar toggle (mobile) ----------
 document.getElementById('toggleSidebar').addEventListener('click', ()=>{
   document.getElementById('sidebar').classList.toggle('open');
 });
 
-// Toast
+// ---------- Toast ----------
 let toastTimer;
 function showToast(msg){
   const t = document.getElementById('toast');
